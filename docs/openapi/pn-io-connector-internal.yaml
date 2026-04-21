@@ -1,0 +1,161 @@
+openapi: 3.0.3
+info:
+  title: pn-io-connector API
+  version: 1.0.0
+  description: API esposta da pn-io-connector per la presa in carico dei messaggi verso App IO.
+
+tags:
+  - name: Message
+    description: Gestione messaggi verso App IO
+
+paths:
+  /io/message:
+    post:
+      tags: [Message]
+      summary: Presa in carico di un messaggio verso App IO
+      operationId: sendIOMessage
+      description: >
+        Endpoint sincrono invocato dall'orchestratore SEND per richiedere l'invio
+        di un messaggio a un cittadino tramite App IO. Il microservizio
+        verifica il profilo del destinatario su IO e, se il cittadino e abilitato
+        alla ricezione, accetta la richiesta e la inserisce nella coda di elaborazione.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageRequest'
+      responses:
+        '202':
+          description: Richiesta presa in carico per elaborazione asincrona. status=[ACCEPTED]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '200':
+          description: >
+            Cittadino non raggiungibile tramite IO. Il messaggio non viene accodato. status=[NOT_ACCEPTED]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Richiesta malformata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          description: Errore interno del server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+components:
+  schemas:
+
+    MessageRequest:
+      type: object
+      required:
+        - requestId
+        - iun
+        - recipientTaxId
+        - senderTaxId
+        - senderServiceId
+        - subject
+        - markdown
+      properties:
+        requestId:
+          type: string
+          description: Identificativo univoco della richiesta (generato dall'orchestratore SEND).
+          example: "REQ-20260408-ABC123"
+        iun:
+          type: string
+          description: Identificativo Univoco Notifica su SEND.
+          example: "ABCD-EFGH-1234-5678-X"
+        recipientTaxId:
+          type: string
+          description: Codice fiscale anonimizzato del destinatario del messaggio.
+          example: "ABCDEFG1234567890"
+        senderTaxId:
+          type: string
+          description: Codice fiscale dell'ente che invia il messaggio.
+          example: "12345678901"
+        senderServiceId:
+          type: string
+          description: Id del servizio per il quale si invia una notifica.
+          example: "000000000"
+        subject:
+          type: string
+          description: Oggetto del messaggio (max 120 caratteri).
+          maxLength: 120
+        markdown:
+          type: string
+          description: >
+            Corpo del messaggio in formato Markdown. Puo contenere sezioni
+            in lingue diverse concatenate nel medesimo campo.
+        attachments:
+          type: array
+          items:
+            type: string
+          description: Lista dei documenti allegati al messaggio.
+          nullable: true
+        sensitiveContent:
+          type: boolean
+          description: Indica se il messaggio contiene informazioni o dati sensibili.
+          example: false
+          nullable: true
+        paymentData:
+          $ref: '#/components/schemas/PaymentData'
+        pollingMaxHours:
+          type: integer
+          description: >
+            Numero massimo di ore per cui effettuare il polling degli esiti.
+            Determinato dall'orchestratore. Default configurato: 48h.
+          default: 48
+
+    PaymentData:
+      type: object
+      required:
+        - amount
+        - noticeCode
+        - creditorTaxId
+      properties:
+        amount:
+          type: integer
+          description: Importo in centesimi di euro.
+          example: 1500
+        noticeCode:
+          type: string
+          description: Codice avviso pagoPA.
+          example: "302000100440009424"
+        creditorTaxId:
+          type: string
+          description: Codice fiscale dell'ente creditore.
+          example: "01234567890"
+
+    MessageResponse:
+      type: object
+      properties:
+        requestId:
+          type: string
+        status:
+          type: string
+          enum: [ACCEPTED, NOT_ACCEPTED]
+          description: >
+            Indica se il messaggio puo essere inviato o meno all'utente.
+            ACCEPTED = Richiesta di invio presa in carico (sender_allowed = true).
+            NOT_ACCEPTED = Richiesta di invio non accettata (sender_allowed = false o 404).
+
+    ProblemDetail:
+      type: object
+      properties:
+        status:
+          type: integer
+        title:
+          type: string
+        detail:
+          type: string
+        traceId:
+          type: string

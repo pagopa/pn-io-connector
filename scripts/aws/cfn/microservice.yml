@@ -11,14 +11,6 @@ Parameters:
     Type: String
     Description: ARN of alarm topic
 
-  WebApiDnsName:
-    Type: String
-    Description: 'The DNS name used for WEB rest API.'
-  
-  CorsAllowedDomains:
-    Type: String
-    Description: 'Comma separated list of domains allowed to make cross origin request'
-
   ContainerImageUri:
     Type: String
     Description: 'Exact container image URI with full repository and image digest'
@@ -42,7 +34,7 @@ Parameters:
   VpcId:
     Type: String
     Description: 'VpcId where the microservice is going to be deployed'
-  
+
   EcsDefaultSecurityGroup:
     Type: String
     Description: 'Default security group required by infrastructure'
@@ -58,34 +50,143 @@ Parameters:
   NetworkLoadBalancerLink:
     Type: String
     Description: 'network load balancer link for API-GW'
-  
+
+  MicroserviceBucketName:
+    Type: String
+    Default: ''
+    Description: 'Name of the bucket where the microservice files are copied during deploy'
+
+  MicroserviceBucketBaseKey:
+    Type: String
+    Default: ''
+    Description: 'Base key of the microservice in the s3 bucket'
+
   LogsKinesisSourceStreamArn:
     Type: String
     Description: 'Kinesis stream that receive logs'
-  
+
   Version:
     Type: String
     Description: 'keep track of used projects commitIds'
 
-Resources:
+  EcsLogGroup:
+    Type: String
+    Description: 'CloudWatch log group name (from storage.yml output)'
 
-  # PN-TemplateBeMs microservice
-  TemplateBeMsMicroservice:
+  AlbSecurityGroup:
+    Type: String
+    Description: 'Application load balancer security group'
+
+  HealthCheckInterval:
+    Type: Number
+    Default: 60
+
+  HealthCheckTimeout:
+    Type: Number
+    Default: 5
+
+  HealthyThresholdCount:
+    Type: Number
+    Default: 5
+
+  UnhealthyThresholdCount:
+    Type: Number
+    Default: 2
+
+  CpuValue:
+    Type: Number
+    Default: 1024
+    Description: Fargate virtual CPU quantity 1024 equals one vCPU
+
+  MemoryAmount:
+    Type: String
+    Default: 2GB
+    AllowedValues: [ 2GB, 4GB, 6GB, 8GB ]
+
+  AutoscalingCheckPeriod:
+    Default: 60
+    Type: Number
+
+  AutoscalingDataPointN:
+    Default: 1
+    Type: Number
+
+  AutoscalingDataPointM:
+    Default: 1
+    Type: Number
+
+  AutoscalingThreshold:
+    Default: 70
+    Type: String
+
+  MinTasksNumber:
+    Default: 1
+    Type: Number
+
+  MaxTasksNumber:
+    Default: 3
+    Type: Number
+
+  LogAlarmStrategy:
+    Type: String
+    Default: 'FATAL'
+
+  WireTapLogActivation:
+    Type: String
+    Default: 'false'
+    AllowedValues: [ 'true', 'false' ]
+
+  PnCronAnalyzer:
+    Type: String
+    Default: '-'
+
+  EnhancedWebSecurityEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: [ 'true', 'false' ]
+
+  LogsKinesisFilterPattern:
+    Type: String
+    Default: ''
+
+  ApplicativeEnvFileChecksum:
+    Type: String
+    Default: ''
+
+Resources:
+  PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub "${TemplateBucketBaseUrl}/fragments/ecs-service.yaml"
+      TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/ecs-service.yaml'
       Parameters:
-        MicroServiceUniqueName: !Sub '${ProjectName}-template-ms-be'
-        CpuValue: 512
-        MemoryAmount: 2GB
+        MicroServiceUniqueName: !Sub '${ProjectName}-io-connector'
+        CpuValue: !Ref CpuValue
+        MemoryAmount: !Ref MemoryAmount
+        HealthCheckTimeout: !Ref HealthCheckTimeout
+        HealthCheckInterval: !Ref HealthCheckInterval
+        HealthyThresholdCount: !Ref HealthyThresholdCount
+        UnhealthyThresholdCount: !Ref UnhealthyThresholdCount
+        AutoscalingStrategy: REST-API
+        AutoscalingThreshold: !Ref AutoscalingThreshold
+        AutoscalingCheckPeriod: !Ref AutoscalingCheckPeriod
+        MinTasksNumber: !Ref MinTasksNumber
+        MaxTasksNumber: !Ref MaxTasksNumber
+        AutoscalingDataPointN: !Ref AutoscalingDataPointN
+        AutoscalingDataPointM: !Ref AutoscalingDataPointM
         AlarmSNSTopicArn: !Ref AlarmSNSTopicArn
-        ContainerImageURI: !Sub '${ContainerImageUri}'
+        ContainerImageURI: !Ref ContainerImageUri
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
-        MappedPaths: '/template-ms-be/*'
+        ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
+        ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
+        MappedPaths: '/io/message*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref SubnetsIds
         VpcId: !Ref VpcId
         EcsDefaultSecurityGroup: !Ref EcsDefaultSecurityGroup
         LoadBalancerListenerArn: !Ref ApplicationLoadBalancerListenerArn
         LoadbalancerRulePriority: !Ref MicroserviceNumber
-        CloudwatchLogKinesisStreamArn: !Ref LogsKinesisSourceStreamArn
+        AlbSecurityGroup: !Ref AlbSecurityGroup
+#        TaskRoleManagedPolicyArn: !Ref PnIoConnectorMicroserviceTaskManagedPolicy
+        EcsLogGroup: !Ref EcsLogGroup
+        LogAlarmStrategyV1: !Ref LogAlarmStrategy
+        ApplicativeEnvFileChecksum: !Ref ApplicativeEnvFileChecksum
