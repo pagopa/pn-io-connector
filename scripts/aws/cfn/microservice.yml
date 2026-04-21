@@ -140,10 +140,17 @@ Parameters:
     Type: String
     Default: '-'
 
-  EnhancedWebSecurityEnabled:
+  # EFS parameters
+  FargateEFSFileSystemID:
     Type: String
-    Default: 'false'
-    AllowedValues: [ 'true', 'false' ]
+    Description: "EFS Filesystem"
+
+  MountEfs:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
 
   LogsKinesisFilterPattern:
     Type: String
@@ -174,6 +181,8 @@ Resources:
         AutoscalingDataPointN: !Ref AutoscalingDataPointN
         AutoscalingDataPointM: !Ref AutoscalingDataPointM
         AlarmSNSTopicArn: !Ref AlarmSNSTopicArn
+        EfsFilesystem: !Ref FargateEFSFileSystemID
+        MountEfs: !Ref MountEfs
         ContainerImageURI: !Sub '${ContainerImageUri}'
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
@@ -186,7 +195,6 @@ Resources:
         LoadBalancerListenerArn: !Ref ApplicationLoadBalancerListenerArn
         LoadbalancerRulePriority: !Ref MicroserviceNumber
         AlbSecurityGroup: !Ref AlbSecurityGroup
-#        TaskRoleManagedPolicyArn: !Ref PnIoConnectorMicroserviceTaskManagedPolicy
         EcsLogGroup: !Ref EcsLogGroup
         LogAlarmStrategyV1: !Ref LogAlarmStrategy
         ApplicativeEnvFileChecksum: !Ref ApplicativeEnvFileChecksum
