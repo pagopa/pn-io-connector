@@ -1,11 +1,14 @@
 package it.pagopa.pn.ioconnector.rest;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
 import it.pagopa.pn.ioconnector.service.IoMessageService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -15,7 +18,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = IoMessageController.class)
+@Import(IoMessageService.class)
 class IoMessageControllerTest {
+
 
     @Autowired
     private WebTestClient webTestClient;
@@ -40,8 +45,8 @@ class IoMessageControllerTest {
                 .expectStatus().isAccepted()
                 .expectBody(MessageResponse.class)
                 .value(r -> {
-                    assert "REQ-TEST-001".equals(r.getRequestId());
-                    assert MessageResponse.StatusEnum.ACCEPTED.equals(r.getStatus());
+                    assertEquals("REQ-TEST-001", r.getRequestId());
+                    assertEquals(MessageResponse.StatusEnum.ACCEPTED, r.getStatus());
                 });
     }
 
@@ -62,8 +67,8 @@ class IoMessageControllerTest {
                 .expectStatus().isOk()
                 .expectBody(MessageResponse.class)
                 .value(r -> {
-                    assert "REQ-TEST-001".equals(r.getRequestId());
-                    assert MessageResponse.StatusEnum.NOT_ACCEPTED.equals(r.getStatus());
+                    assertEquals("REQ-TEST-001", r.getRequestId());
+                    assertEquals(MessageResponse.StatusEnum.NOT_ACCEPTED, r.getStatus());
                 });
     }
 

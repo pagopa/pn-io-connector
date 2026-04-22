@@ -17,7 +17,7 @@ paths:
       description: >
         Endpoint sincrono invocato dall'orchestratore SEND per richiedere l'invio
         di un messaggio a un cittadino tramite App IO. Il microservizio
-        verifica il profilo del destinatario su IO e, se il cittadino e abilitato
+        verifica il profilo del destinatario su IO e, se il cittadino è abilitato
         alla ricezione, accetta la richiesta e la inserisce nella coda di elaborazione.
       requestBody:
         required: true
