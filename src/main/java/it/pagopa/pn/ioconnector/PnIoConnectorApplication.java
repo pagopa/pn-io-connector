@@ -1,27 +1,25 @@
-package it.pagopa.pn.template;
+package it.pagopa.pn.ioconnector;
 
+import it.pagopa.pn.commons.configs.listeners.TaskIdApplicationListener;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@SpringBootApplication
-public class TemplateApplication {
-
+@SpringBootApplication(scanBasePackages = "it.pagopa.pn.ioconnector")
+public class PnIoConnectorApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(TemplateApplication.class, args);
+        SpringApplication app = new SpringApplication(PnIoConnectorApplication.class);
+        app.addListeners(new TaskIdApplicationListener());
+        app.run(args);
     }
-
 
     @RestController
     @RequestMapping("/")
     public static class RootController {
-
-        @GetMapping("/")
-        public String home() {
-            return "";
-        }
+        @GetMapping
+        public String home() { return ""; }
     }
 }

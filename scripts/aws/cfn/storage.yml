@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Some storage with input and output
+Description: Storage resources for pn-io-connector
 
 Parameters:
   ProjectName:
@@ -15,20 +15,41 @@ Parameters:
   TemplateBucketBaseUrl:
     Type: String
     Description: URL da cui caricare i frammenti di template di infrastruttura
-  
+
   Version:
     Type: String
     Description: 'keep track of used projects commitIds'
-  
-  CdcKinesisSourceStreamArn:
+
+  AlarmSNSTopicName:
     Type: String
-    Description: 'Where to send CDC'
+    Description: 'Topic alarm'
+
+  LogsKinesisSourceStreamArn:
+    Type: String
+    Description: 'Where to send Logs'
+
+  LogRetention:
+    Type: Number
+    Default: 14
 
 Resources:
-    NullResource:
-        Type: AWS::CloudFormation::WaitConditionHandle
+
+  # ── Log Group ──────────────────────────────────────────────────────────────
+
+  PnIoConnectorLogGroup:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      TemplateURL: !Sub "${TemplateBucketBaseUrl}/fragments/log-group.yaml"
+      Parameters:
+        LogGroupName: !Sub '${ProjectName}-io-connector'
+        LogGroupRetention: !Ref LogRetention
+        LogsKinesisSourceStreamArn: !Ref LogsKinesisSourceStreamArn
 
 Outputs:
-    SampleOutput:
-      Description: A Sample Output
-      Value: 'na'
+
+  # Log Group
+  EcsLogGroup:
+    Value: !GetAtt PnIoConnectorLogGroup.Outputs.LogGroupName
+    Description: pn-io-connector ECS log group name
