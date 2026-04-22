@@ -168,6 +168,7 @@ Resources:
       Parameters:
         MicroServiceUniqueName: !Sub '${ProjectName}-io-connector'
         CpuValue: !Ref CpuValue
+        CpuArchitecture: ARM
         MemoryAmount: !Ref MemoryAmount
         HealthCheckTimeout: !Ref HealthCheckTimeout
         HealthCheckInterval: !Ref HealthCheckInterval
