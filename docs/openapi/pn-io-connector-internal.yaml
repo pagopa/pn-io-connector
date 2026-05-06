@@ -19,6 +19,8 @@ paths:
         di un messaggio a un cittadino tramite App IO. Il microservizio
         verifica il profilo del destinatario su IO e, se il cittadino è abilitato
         alla ricezione, accetta la richiesta e la inserisce nella coda di elaborazione.
+      parameters:
+        - $ref: '#/components/parameters/xPagopaIoConCxId'
       requestBody:
         required: true
         content:
@@ -53,6 +55,15 @@ paths:
                 $ref: '#/components/schemas/ProblemDetail'
 
 components:
+  parameters:
+    xPagopaIoConCxId:
+      name: x-pagopa-iocon-cx-id
+      in: header
+      required: true
+      description: Identificativo del client che invoca il microservizio (cxId).
+      schema:
+        type: string
+
   schemas:
 
     MessageRequest:
@@ -138,6 +149,8 @@ components:
     MessageResponse:
       type: object
       properties:
+        cxId:
+          type: string
         requestId:
           type: string
         status:
