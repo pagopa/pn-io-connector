@@ -12,7 +12,6 @@ public abstract class BaseRestClient {
     private static final String HEADER_API_KEY = "Ocp-Apim-Subscription-Key";
 
     @Autowired
-    @Qualifier("withTracing")
     private RestClient restClientWithTracing;
 
     protected RestClient.Builder initRestClient(String apiKey) {

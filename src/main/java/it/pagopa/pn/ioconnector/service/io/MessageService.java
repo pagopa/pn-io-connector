@@ -23,7 +23,6 @@ public class MessageService {
 
     public MessageResponse handleSendRequest(String cxId, MessageRequest request) {
         log.logStartingProcess(HANDLE_SEND_REQUEST);
-        MDC.put("cxId", cxId);
         MDC.put("requestId", request.getRequestId());
         try {
             String apiKeyUse = ioService.getServiceUseKey(
@@ -63,6 +62,8 @@ public class MessageService {
         } catch (Exception e) {
             log.logEndingProcess(HANDLE_SEND_REQUEST, false, e.getMessage(), e);
             throw e;
+        } finally {
+            MDC.remove("requestId");
         }
     }
 }

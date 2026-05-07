@@ -141,7 +141,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>https://raw.githubusercontent.com/pagopa/io-functions-services/refs/heads/master/apps/io-functions-services/openapi/index.yaml</inputSpec>
+                            <inputSpec>https://raw.githubusercontent.com/pagopa/io-functions-services/6b101a2e303fc5e571669ddaabbeb5c90bf017d3/openapi/index.yaml</inputSpec>
                             <generatorName>java</generatorName>
                             <library>restclient</library>
                             <generateApiDocumentation>false</generateApiDocumentation>
