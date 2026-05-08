@@ -188,7 +188,7 @@ Resources:
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
-        MappedPaths: '/io/message*'
+        MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref SubnetsIds
         VpcId: !Ref VpcId
