@@ -1,22 +1,20 @@
 package it.pagopa.pn.ioconnector.middleware.msclient;
 
+import it.pagopa.pn.commons.log.PnLogger;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.datavault.v1.api.RecipientsApi;
 import lombok.CustomLog;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Mono;
 
 @CustomLog
 @Component
+@RequiredArgsConstructor
 public class DataVaultClient {
 
-    /**
-     * Deanonymizza il recipientTaxId.
-     *
-     * @param recipientTaxId cf anonimizzato proveniente dalla richiesta SEND
-     * @return recipientTaxId deanonimizzato
-     */
-    public Mono<String> deanonymize(String recipientTaxId) {
-        log.info("DataVaultClient.deanonymize");
-        // TODO: chiamata a pn-data-vault per ottenere il CF deanonimizzato
-        return Mono.just(recipientTaxId);
+    private final RecipientsApi recipientsApi;
+
+    public String deanonymize(String internalId) {
+        log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.PN_DATA_VAULT, "recipientsApi");
+        return internalId;
     }
 }
