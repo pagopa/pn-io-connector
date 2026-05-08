@@ -3,7 +3,6 @@ package it.pagopa.pn.ioconnector.service.io;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
-import it.pagopa.pn.ioconnector.service.DataVaultService;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
@@ -18,23 +17,22 @@ import static it.pagopa.pn.ioconnector.utils.LogUtils.HANDLE_SEND_REQUEST;
 @RequiredArgsConstructor
 public class MessageService {
 
-    private final IOService ioService;
-    private final DataVaultService dataVaultService;
+    private final ProfileService profileService;
 
     public MessageResponse handleSendRequest(String cxId, MessageRequest request) {
         log.logStartingProcess(HANDLE_SEND_REQUEST);
         MDC.put("requestId", request.getRequestId());
         try {
-            String apiKeyUse = ioService.getServiceUseKey(
-                request.getSenderTaxId(), request.getSenderServiceId()
+            boolean senderAllowed = profileService.resolveProfile(
+                request.getSenderTaxId(), request.getSenderServiceId(), request.getRecipientTaxId()
             );
-            String taxId = dataVaultService.deanonymize(request.getRecipientTaxId());
-            boolean senderAllowed = ioService.checkUserProfile(taxId, apiKeyUse);
 
             if (!senderAllowed) {
                 log.info("Profilo IO non abilitato — requestId={}", request.getRequestId());
                 log.logEndingProcess(HANDLE_SEND_REQUEST);
-                return new MessageResponse().requestId(request.getRequestId()).cxId(cxId).status(MessageResponse.StatusEnum.NOT_ACCEPTED);
+                return new MessageResponse()
+                    .requestId(request.getRequestId()).cxId(cxId)
+                    .status(MessageResponse.StatusEnum.NOT_ACCEPTED);
             }
 
             MessageSendRequest sqsMsg = MessageSendRequest.builder()
@@ -57,7 +55,9 @@ public class MessageService {
                     sqsMsg.getSenderServiceId());
 
             log.logEndingProcess(HANDLE_SEND_REQUEST);
-            return new MessageResponse().requestId(sqsMsg.getRequestId()).cxId(cxId).status(MessageResponse.StatusEnum.ACCEPTED);
+            return new MessageResponse()
+                .requestId(sqsMsg.getRequestId()).cxId(cxId)
+                .status(MessageResponse.StatusEnum.ACCEPTED);
 
         } catch (Exception e) {
             log.logEndingProcess(HANDLE_SEND_REQUEST, false, e.getMessage(), e);

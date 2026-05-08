@@ -2,16 +2,16 @@ openapi: 3.0.3
 info:
   title: pn-io-connector API
   version: 1.0.0
-  description: API esposta da pn-io-connector per la presa in carico dei messaggi verso App IO.
+  description: API esposta da pn-io-connector per le operazioni verso App IO.
 
 tags:
-  - name: Message
-    description: Gestione messaggi verso App IO
+  - name: Io
+    description: Operazioni verso App IO
 
 paths:
   /io/message:
     post:
-      tags: [Message]
+      tags: [Io]
       summary: Presa in carico di un messaggio verso App IO
       operationId: sendIOMessage
       description: >
@@ -53,6 +53,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+  /io/profile:
+    post:
+      tags: [Io]
+      summary: Verifica raggiungibilità profilo IO del destinatario
+      description: >
+        Endpoint invocato dal client pagopa (es. orchestratore SEND) per
+        verificare se un cittadino è raggiungibile tramite App IO (profilo presente
+        e sender_allowed = true).La risposta riporta status 
+        (SENDER_ALLOWED / SENDER_NOT_ALLOWED) e, se il profilo è attivo, 
+        le preferredLanguages restituite da IO.
+      operationId: getIOProfile
+      parameters:
+        - $ref: '#/components/parameters/xPagopaIoConCxId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetProfileRequest'
+      responses:
+        '200':
+          description: Esito della verifica profilo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetProfileResponse'
+        '400':
+          description: Richiesta malformata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          description: Errore interno del server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+  /messages/{id}:
+    get:
+      summary: Recupero metadati allegati di un messaggio
+      description: >
+        Endpoint invocato da BackEnd IO quando l'utente apre il dettaglio del messaggio
+        su App IO. Viene verificato che il codice fiscale del destinatario 
+        sia coerente con quello associato al messaggio, richiesta a SafeStorage 
+        una PresignedUri per ciascun allegato e restituita una lista di metadati che
+        potrà essere usata dal client App IO per richiedere il contenuto binario.
+      operationId: getMessage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificativo del messaggio su IO (ioMessageId).
+      responses:
+        '200':
+          description: Metadati degli allegati associati al messaggio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetMessageResponse'
+        '403':
+          description: Codice fiscale del chiamante non coerente con il destinatario.
+        '404':
+          description: Messaggio non trovato o allegati non presenti.
 
 components:
   parameters:
@@ -160,7 +226,82 @@ components:
             Indica se il messaggio puo essere inviato o meno all'utente.
             ACCEPTED = Richiesta di invio presa in carico (sender_allowed = true).
             NOT_ACCEPTED = Richiesta di invio non accettata (sender_allowed = false o 404).
-
+    GetProfileRequest:
+      type: object
+      required:
+        - recipientTaxId
+        - senderTaxId
+        - senderServiceId
+      properties:
+        recipientTaxId:
+          type: string
+          description: Codice fiscale anonimizzato del destinatario.
+          example: "ABCDEFG1234567890"
+        senderTaxId:
+          type: string
+          description: >
+            Codice fiscale dell'ente mittente. Necessario per recuperare la ApiKey MANAGE.
+          example: "12345678901"
+        senderServiceId:
+          type: string
+          description: >
+            Id del servizio IO dell'ente mittente. Necessario per recuperare la ApiKey USE.
+          example: "000000000"
+    GetProfileResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [SENDER_ALLOWED, SENDER_NOT_ALLOWED]
+          description: >
+            SENDER_ALLOWED = profilo presente su IO e sender_allowed = true.
+            SENDER_NOT_ALLOWED = profilo assente (HTTP 404 da IO) o sender_allowed = false.
+        preferredLanguages:
+          type: array
+          nullable: true
+          description: >
+            Preferenze di lingua del destinatario..
+            Valorizzato solo quando status = SENDER_ALLOWED.
+          items:
+            type: string
+            example: "it_IT"
+    GetMessageResponse:
+      type: object
+      description: Dettagli del messaggio e lista degli allegati esposti a BackEnd IO.
+      properties:
+        details:
+          type: object
+          properties:
+            subject:
+              type: string
+              description: Titolo del messaggio.
+            markdown:
+              type: string
+              description: Corpo del messaggio in formato markdown.
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Identificativo dell'allegato.
+              name:
+                type: string
+                maxLength: 127
+                description: Nome allegato con desinenza ".pdf" obbligatoria.
+              content_type:
+                type: string
+                description: MIME type dell'allegato. Deve essere "application/pdf".
+                default: application/pdf
+              url:
+                type: string
+                format: uri
+                description: URL logico dell'allegato.
+              category:
+                type: string
+                description: Categoria dell'allegato. Deve essere "DOCUMENT".
+                default: DOCUMENT
     ProblemDetail:
       type: object
       properties:

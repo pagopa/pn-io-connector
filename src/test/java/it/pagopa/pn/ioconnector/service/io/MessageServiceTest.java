@@ -1,9 +1,7 @@
-package it.pagopa.pn.ioconnector.service;
+package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
-import it.pagopa.pn.ioconnector.service.io.IOService;
-import it.pagopa.pn.ioconnector.service.io.MessageService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,16 +14,13 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class MessageServiceTest {
 
-    @Mock private DataVaultService dataVaultService;
-    @Mock private IOService ioService;
+    @Mock private ProfileService profileService;
 
     @InjectMocks private MessageService messageService;
 
     @Test
     void handleSendRequest_accepted() {
-        when(ioService.getServiceUseKey("SENDER-TAX", "SVC-001")).thenReturn("key");
-        when(dataVaultService.deanonymize("ANON-TAX")).thenReturn("CF");
-        when(ioService.checkUserProfile("CF", "key")).thenReturn(true);
+        when(profileService.resolveProfile("SENDER-TAX", "SVC-001", "ANON-TAX")).thenReturn(true);
 
         MessageResponse result = messageService.handleSendRequest("pn-delivery-push", buildRequest());
 
@@ -36,9 +31,7 @@ class MessageServiceTest {
 
     @Test
     void handleSendRequest_notAccepted() {
-        when(ioService.getServiceUseKey("SENDER-TAX", "SVC-001")).thenReturn("key");
-        when(dataVaultService.deanonymize("ANON-TAX")).thenReturn("CF");
-        when(ioService.checkUserProfile("CF", "key")).thenReturn(false);
+        when(profileService.resolveProfile("SENDER-TAX", "SVC-001", "ANON-TAX")).thenReturn(false);
 
         MessageResponse result = messageService.handleSendRequest("pn-delivery-push", buildRequest());
 
