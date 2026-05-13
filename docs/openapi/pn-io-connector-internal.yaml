@@ -15,10 +15,10 @@ paths:
       summary: Presa in carico di un messaggio verso App IO
       operationId: sendIOMessage
       description: >
-        Endpoint sincrono invocato dall'orchestratore SEND per richiedere l'invio
+        Endpoint sincrono invocato da client pagopa per richiedere l'invio
         di un messaggio a un cittadino tramite App IO. Il microservizio
-        verifica il profilo del destinatario su IO e, se il cittadino è abilitato
-        alla ricezione, accetta la richiesta e la inserisce nella coda di elaborazione.
+        verifica, salvo errori di validazione, inserisce
+        la richiesta nella coda di elaborazione.
       parameters:
         - $ref: '#/components/parameters/xPagopaIoConCxId'
       requestBody:
@@ -30,13 +30,6 @@ paths:
       responses:
         '202':
           description: Richiesta presa in carico per elaborazione asincrona. status=[ACCEPTED]
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '200':
-          description: >
-            Cittadino non raggiungibile tramite IO. Il messaggio non viene accodato. status=[NOT_ACCEPTED]
           content:
             application/json:
               schema:
@@ -215,17 +208,14 @@ components:
     MessageResponse:
       type: object
       properties:
-        cxId:
+        xPagopaIoConCxId:
           type: string
         requestId:
           type: string
         status:
           type: string
-          enum: [ACCEPTED, NOT_ACCEPTED]
-          description: >
-            Indica se il messaggio puo essere inviato o meno all'utente.
-            ACCEPTED = Richiesta di invio presa in carico (sender_allowed = true).
-            NOT_ACCEPTED = Richiesta di invio non accettata (sender_allowed = false o 404).
+          enum: [ACCEPTED]
+          description: Richiesta di invio presa in carico.
     GetProfileRequest:
       type: object
       required:

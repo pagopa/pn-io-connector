@@ -15,7 +15,7 @@ import java.util.List;
 public class MessageSendRequest {
 
     private String requestId;
-    private String cxId;
+    private String xPagopaIoConCxId;
     private String iun;
     private String recipientTaxId;
     private String senderTaxId;
@@ -23,7 +23,6 @@ public class MessageSendRequest {
     private String subject;
     private String markdown;
     private List<String> attachments;
-    private Boolean sensitiveContent;
     private PaymentData paymentData;
     private Instant pollingMaxDate;
     private Instant createdAt;
