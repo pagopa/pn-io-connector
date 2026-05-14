@@ -17,37 +17,32 @@ import static it.pagopa.pn.ioconnector.utils.LogUtils.HANDLE_SEND_REQUEST;
 @RequiredArgsConstructor
 public class MessageService {
 
-    private final ProfileService profileService;
-
     public MessageResponse handleSendRequest(String cxId, MessageRequest request) {
         log.logStartingProcess(HANDLE_SEND_REQUEST);
         MDC.put("requestId", request.getRequestId());
         try {
-            boolean senderAllowed = profileService.resolveProfile(
-                request.getSenderTaxId(), request.getSenderServiceId(), request.getRecipientTaxId()
-            );
-
-            if (!senderAllowed) {
-                log.info("Profilo IO non abilitato — requestId={}", request.getRequestId());
-                log.logEndingProcess(HANDLE_SEND_REQUEST);
-                return new MessageResponse()
-                    .requestId(request.getRequestId()).cxId(cxId)
-                    .status(MessageResponse.StatusEnum.NOT_ACCEPTED);
-            }
 
             MessageSendRequest sqsMsg = MessageSendRequest.builder()
-                    .requestId(request.getRequestId())
-                    .cxId(cxId)
-                    .iun(request.getIun())
-                    .recipientTaxId(request.getRecipientTaxId())
-                    .senderTaxId(request.getSenderTaxId())
-                    .senderServiceId(request.getSenderServiceId())
-                    .subject(request.getSubject())
-                    .markdown(request.getMarkdown())
-                    .attachments(request.getAttachments())
-                    .sensitiveContent(request.getSensitiveContent())
-                    .createdAt(Instant.now())
-                    .build();
+                .requestId(request.getRequestId())
+                .xPagopaIoConCxId(cxId)
+                .iun(request.getIun())
+                .recipientTaxId(request.getRecipientTaxId())
+                .senderTaxId(request.getSenderTaxId())
+                .senderServiceId(request.getSenderServiceId())
+                .subject(request.getSubject())
+                .markdown(request.getMarkdown())
+                .attachments(request.getAttachments())
+                .sensitiveContent(request.getSensitiveContent())
+                .dueDate(request.getDueDate())
+                .paymentData(
+                    request.getPaymentData() != null ?
+                    MessageSendRequest.PaymentData.builder().
+                        amount(request.getPaymentData().getAmount()).
+                        noticeCode(request.getPaymentData().getNoticeCode()).
+                        invalidAfterDueDate(request.getPaymentData().getInvalidAfterDueDate()).
+                        build() : null)
+                .createdAt(Instant.now())
+                .build();
 
             log.info("Richiesta presa in carico — requestId={} iun={} senderServiceId={}",
                     sqsMsg.getRequestId(),
@@ -56,7 +51,7 @@ public class MessageService {
 
             log.logEndingProcess(HANDLE_SEND_REQUEST);
             return new MessageResponse()
-                .requestId(sqsMsg.getRequestId()).cxId(cxId)
+                .requestId(sqsMsg.getRequestId()).xPagopaIoConCxId(cxId)
                 .status(MessageResponse.StatusEnum.ACCEPTED);
 
         } catch (Exception e) {
