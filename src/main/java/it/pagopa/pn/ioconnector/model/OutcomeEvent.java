@@ -11,15 +11,11 @@ import java.time.Instant;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class IoOutcomeEvent {
+public class OutcomeEvent {
 
     private String requestId;
-    private String cxId;
+    private String xPagopaIoConCxId;
     private String ioMessageId;
-    private OutcomeType outcomeType;
-    private String ioStatus;
-    private String readStatus;
-    private String paymentStatus;
-    private boolean pollingExhausted;
+    private EventType eventType;
     private Instant eventTimestamp;
 }
