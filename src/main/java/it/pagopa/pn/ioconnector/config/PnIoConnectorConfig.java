@@ -11,4 +11,6 @@ import org.springframework.context.annotation.Import;
 @ConfigurationProperties(prefix = "pn.io-connector")
 @Import(SharedAutoConfiguration.class)
 public class PnIoConnectorConfig {
+
+    private String dynamodbTableName;
 }
