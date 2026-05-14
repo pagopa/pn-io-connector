@@ -23,17 +23,26 @@ public class MessageService {
         try {
 
             MessageSendRequest sqsMsg = MessageSendRequest.builder()
-                    .requestId(request.getRequestId())
-                    .xPagopaIoConCxId(cxId)
-                    .iun(request.getIun())
-                    .recipientTaxId(request.getRecipientTaxId())
-                    .senderTaxId(request.getSenderTaxId())
-                    .senderServiceId(request.getSenderServiceId())
-                    .subject(request.getSubject())
-                    .markdown(request.getMarkdown())
-                    .attachments(request.getAttachments())
-                    .createdAt(Instant.now())
-                    .build();
+                .requestId(request.getRequestId())
+                .xPagopaIoConCxId(cxId)
+                .iun(request.getIun())
+                .recipientTaxId(request.getRecipientTaxId())
+                .senderTaxId(request.getSenderTaxId())
+                .senderServiceId(request.getSenderServiceId())
+                .subject(request.getSubject())
+                .markdown(request.getMarkdown())
+                .attachments(request.getAttachments())
+                .sensitiveContent(request.getSensitiveContent())
+                .dueDate(request.getDueDate())
+                .paymentData(
+                    request.getPaymentData() != null ?
+                    MessageSendRequest.PaymentData.builder().
+                        amount(request.getPaymentData().getAmount()).
+                        noticeCode(request.getPaymentData().getNoticeCode()).
+                        invalidAfterDueDate(request.getPaymentData().getInvalidAfterDueDate()).
+                        build() : null)
+                .createdAt(Instant.now())
+                .build();
 
             log.info("Richiesta presa in carico — requestId={} iun={} senderServiceId={}",
                     sqsMsg.getRequestId(),

@@ -28,14 +28,22 @@ paths:
             schema:
               $ref: '#/components/schemas/MessageRequest'
       responses:
-        '202':
-          description: Richiesta presa in carico per elaborazione asincrona. status=[ACCEPTED]
+        '200':
+          description: Richiesta presa in carico per elaborazione asincrona.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
+        '204':
+          description: Richiesta già ricevuta con stesso requestId e stesso payload (idempotenza). Nessun contenuto restituito.
         '400':
           description: Richiesta malformata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: requestId già esistente ma con payload diverso da quello originale.
           content:
             application/json:
               schema:

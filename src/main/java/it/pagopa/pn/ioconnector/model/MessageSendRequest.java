@@ -23,6 +23,8 @@ public class MessageSendRequest {
     private String subject;
     private String markdown;
     private List<String> attachments;
+    private Boolean sensitiveContent;
+    private String dueDate;
     private PaymentData paymentData;
     private Instant pollingMaxDate;
     private Instant createdAt;
@@ -35,5 +37,6 @@ public class MessageSendRequest {
         private Integer amount;
         private String noticeCode;
         private String creditorTaxId;
+        private Boolean invalidAfterDueDate;
     }
 }

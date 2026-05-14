@@ -28,7 +28,7 @@ public class IOService {
     }
 
     public OutcomeEvent getMessageStatus(String taxId, String ioMessageId, String apiKey) {
-        // TODO: mappare ExternalMessageResponseWithContent → IoOutcomeEvent
+        // TODO: mappare ExternalMessageResponseWithContent → OutcomeEvent
         ioClient.getMessageStatus(taxId, ioMessageId, apiKey);
         return null;
     }
