@@ -129,7 +129,6 @@ components:
       type: object
       required:
         - requestId
-        - iun
         - recipientTaxId
         - senderTaxId
         - senderServiceId
@@ -176,6 +175,11 @@ components:
           description: Indica se il messaggio contiene informazioni o dati sensibili.
           example: false
           nullable: true
+        dueDate:
+          type: string
+          format: UTCISODateFromString
+          description: Permette di associare al messaggio un promemoria. Il formato data deve essere ISO-8601 e fuso orario UTC
+          example: 2022-09-30T22:00:00Z
         paymentData:
           $ref: '#/components/schemas/PaymentData'
         pollingMaxHours:
@@ -204,7 +208,9 @@ components:
           type: string
           description: Codice fiscale dell'ente creditore.
           example: "01234567890"
-
+        invalidAfterDueDate:
+          type: boolean
+          description: In app visualizza il pagamento come scaduto se la data attuale è successiva a dueDate
     MessageResponse:
       type: object
       properties:
