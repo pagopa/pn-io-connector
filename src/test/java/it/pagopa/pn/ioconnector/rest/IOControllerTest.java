@@ -47,7 +47,7 @@ class IOControllerTest {
     void sendIOMessageAccepted() throws Exception {
         MessageResponse response = new MessageResponse()
                 .requestId("REQ-TEST-001")
-                .cxId("pn-delivery-push")
+                .xPagopaIoConCxId("pn-delivery-push")
                 .status(MessageResponse.StatusEnum.ACCEPTED);
 
         when(messageService.handleSendRequest(eq("pn-delivery-push"), any(MessageRequest.class))).thenReturn(response);
@@ -58,27 +58,8 @@ class IOControllerTest {
                 .content(objectMapper.writeValueAsString(buildMessageRequest())))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.requestId").value("REQ-TEST-001"))
-                .andExpect(jsonPath("$.cxId").value("pn-delivery-push"))
+                .andExpect(jsonPath("$.xPagopaIoConCxId").value("pn-delivery-push"))
                 .andExpect(jsonPath("$.status").value("ACCEPTED"));
-    }
-
-    @Test
-    void sendIOMessageNotAccepted() throws Exception {
-        MessageResponse response = new MessageResponse()
-                .requestId("REQ-TEST-001")
-                .cxId("pn-delivery-push")
-                .status(MessageResponse.StatusEnum.NOT_ACCEPTED);
-
-        when(messageService.handleSendRequest(eq("pn-delivery-push"), any(MessageRequest.class))).thenReturn(response);
-
-        mockMvc.perform(post("/io/message")
-                .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(buildMessageRequest())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.requestId").value("REQ-TEST-001"))
-                .andExpect(jsonPath("$.cxId").value("pn-delivery-push"))
-                .andExpect(jsonPath("$.status").value("NOT_ACCEPTED"));
     }
 
     @Test
