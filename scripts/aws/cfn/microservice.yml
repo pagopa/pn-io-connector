@@ -160,6 +160,10 @@ Parameters:
     Type: String
     Default: ''
 
+  PnIoConnectorSecretsName:
+    Type: String
+    Description: 'Secret ID for IO Api'
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -188,6 +192,7 @@ Resources:
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
+        ContainerEnvEntry4: !Sub 'PnIoConnectorSecretsName=${PnIoConnectorSecretsName}'
         MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref SubnetsIds

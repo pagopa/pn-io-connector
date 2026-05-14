@@ -56,6 +56,12 @@
             <version>1.6.5</version>
         </dependency>
 
+        <!-- AWS Secrets Manager -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>secretsmanager</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
