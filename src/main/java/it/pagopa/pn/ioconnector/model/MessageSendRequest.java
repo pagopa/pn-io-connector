@@ -15,6 +15,7 @@ import java.util.List;
 public class MessageSendRequest {
 
     private String requestId;
+    private String cxId;
     private String iun;
     private String recipientTaxId;
     private String senderTaxId;

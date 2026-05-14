@@ -197,7 +197,7 @@ Resources:
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
         ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${IOConnectorRequestsTableName}'
-        MappedPaths: '/io/message*'
+        MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref SubnetsIds
         VpcId: !Ref VpcId
