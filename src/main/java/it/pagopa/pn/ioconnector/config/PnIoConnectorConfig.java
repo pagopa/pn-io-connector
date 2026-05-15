@@ -10,7 +10,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
+import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @Data
@@ -24,18 +26,18 @@ public class PnIoConnectorConfig {
 
     @Bean
     public Map<String, String> apiKeyUseSecrets(SecretsManagerClient secretsManagerClient) {
-        var response = secretsManagerClient.getSecretValue(
-            GetSecretValueRequest.builder()
-                .secretId(secretsName)
-                .build()
-        );
+        Map<String, String> apiKeyUseMap = new HashMap<>();
+        GetSecretValueResponse getSecretValueResponse;
+        GetSecretValueRequest getSecretValueRequest = GetSecretValueRequest.builder().secretId(secretsName).build();
         try {
-            return new ObjectMapper().readValue(
-                response.secretString(),
+            getSecretValueResponse = secretsManagerClient.getSecretValue(getSecretValueRequest);
+            apiKeyUseMap = new ObjectMapper().readValue(
+                getSecretValueResponse.secretString(),
                 new TypeReference<>() {}
             );
         } catch (Exception e) {
             throw new IllegalStateException("Failed to parse Secrets Manager secret: " + secretsName, e);
         }
+        return apiKeyUseMap;
     }
 }

@@ -20,8 +20,7 @@ public class AwsServicesClientsConfigActivation extends AwsServicesClientsConfig
 
     @Bean
     public SecretsManagerClient secretsManagerClient(AwsConfigs awsConfig) {
-        var builder = SecretsManagerClient.builder()
-                .region(Region.of(awsConfig.getRegionCode()));
+        var builder = SecretsManagerClient.builder().region(Region.of(awsConfig.getRegionCode()));
         if (StringUtils.hasText(awsConfig.getEndpointUrl())) {
             builder.endpointOverride(URI.create(awsConfig.getEndpointUrl()));
         }

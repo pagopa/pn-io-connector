@@ -20,9 +20,7 @@ public class ProfileService {
     public GetProfileResponse getProfile(GetProfileRequest request) {
         log.logStartingProcess(GET_IO_PROFILE);
         try {
-            boolean allowed = resolveProfile(
-                request.getSenderTaxId(), request.getSenderServiceId(), request.getRecipientTaxId()
-            );
+            boolean allowed = resolveProfile(request.getSenderServiceId(), request.getRecipientTaxId());
             GetProfileResponse.StatusEnum status = allowed
                 ? GetProfileResponse.StatusEnum.SENDER_ALLOWED
                 : GetProfileResponse.StatusEnum.SENDER_NOT_ALLOWED;
@@ -34,8 +32,8 @@ public class ProfileService {
         }
     }
 
-    public boolean resolveProfile(String senderTaxId, String senderServiceId, String recipientTaxId) {
-        String apiKeyUse = ioService.getServiceUseKey(senderTaxId, senderServiceId);
+    public boolean resolveProfile(String serviceId, String recipientTaxId) {
+        String apiKeyUse = ioService.getServiceUseKey(null, serviceId);
         String taxId = dataVaultService.deanonymize(recipientTaxId);
         return ioService.checkUserProfile(taxId, apiKeyUse);
     }

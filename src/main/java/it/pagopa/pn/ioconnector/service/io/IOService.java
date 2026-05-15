@@ -34,8 +34,6 @@ public class IOService {
     }
 
     public String getServiceUseKey(String senderTaxId, String serviceId) {
-        // TODO: recuperare la ApiKey MANAGE a partire dal senderTaxId
-        ioClient.getServiceUseKey(serviceId, null);
-        return "";
+        return ioClient.getServiceUseKey(serviceId, null);
     }
 }

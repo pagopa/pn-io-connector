@@ -16,6 +16,8 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static it.pagopa.pn.ioconnector.utils.LogUtils.GET_SERVICE_USE_KEY;
+
 @CustomLog
 @Component
 @RequiredArgsConstructor
@@ -45,13 +47,7 @@ public class IOClient extends BaseRestClient {
     }
 
     public String getServiceUseKey(String serviceId, String apiKeyManage) {
-        if (apiKeyManage == null) {
-            log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, "secrets.apiKeyUseSecrets");
-            return apiKeyUseSecrets.get(serviceId);
-        }
-        //TODO: se apiKeyManage != null utilizzare manageAuthorizationApi per recuperare la apiKey USE
-        log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, "manageAuthorizationIoApi.cmsGetServiceKeys");
-        return null;
+        return apiKeyUseSecrets.get(serviceId);
     }
 
     private DefaultApi defaultIoApi(String apiKeyUse) {

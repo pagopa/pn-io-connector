@@ -164,6 +164,11 @@ Parameters:
     Type: String
     Description: 'Secret ID for IO Api'
 
+  PnIoConnectorManagedPolicyName:
+    Type: String
+    Description: 'Nome della managed policy associata ad IO Connector'
+    Default: 'PnIoConnectorManagedPolicyName'
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -205,6 +210,22 @@ Resources:
         EcsLogGroup: !Ref EcsLogGroup
         LogAlarmStrategyV1: !Ref LogAlarmStrategy
         ApplicativeEnvFileChecksum: !Ref ApplicativeEnvFileChecksum
+
+  PnIoConnectorManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: 'String'
+      ManagedPolicyName: !Ref PnIoConnectorManagedPolicyName
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Sid: 'ReadFromSecretsManagerIOConnectorSecrets'
+            Action:
+              - 'secretsmanager:DescribeSecret'
+              - 'secretsmanager:GetSecretValue'
+            Resource:
+              - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]
 
   IoConnectorMicroserviceTaskManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
