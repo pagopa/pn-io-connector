@@ -9,6 +9,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.DefaultApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.ManageAuthorizationApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ExternalMessageResponseWithContent;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.FiscalCodePayload;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnector.middleware.msclient.common.BaseRestClient;
 import lombok.CustomLog;
@@ -28,10 +29,9 @@ public class IOClient extends BaseRestClient {
     private final ManageAuthorizationApi manageAuthorizationApi;
     private final Map<String, DefaultApi> defaultApiCache = new ConcurrentHashMap<>();
 
-    public boolean checkUserProfile(FiscalCodePayload payload, String apiKeyUse) {
+    public LimitedProfile checkUserProfile(FiscalCodePayload fiscalCodePayload, String apiKeyUse) {
         log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, "defaultIoApi.getProfileByPOST");
-        //TODO: utilizzare defaultIoApi
-        return true;
+        return defaultIoApi(apiKeyUse).getProfileByPOST(fiscalCodePayload);
     }
 
     public String sendMessage(NewMessage message, String apiKeyUse) {
