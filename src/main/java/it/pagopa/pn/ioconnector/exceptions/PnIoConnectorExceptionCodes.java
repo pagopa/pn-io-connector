@@ -6,4 +6,8 @@ public final class PnIoConnectorExceptionCodes extends PnExceptionsCodes {
 
     private PnIoConnectorExceptionCodes() {}
 
+    public static final String PN_IO_CONNECTOR_IO_RECIPIENT_NOT_FOUND = "PN_IO_CONNECTOR_IO_RECIPIENT_NOT_FOUND";
+    public static final String PN_IO_CONNECTOR_IO_RATE_LIMIT = "PN_IO_CONNECTOR_IO_RATE_LIMIT";
+    public static final String PN_IO_CONNECTOR_IO_SERVER_ERROR = "PN_IO_CONNECTOR_IO_SERVER_ERROR";
+
 }
