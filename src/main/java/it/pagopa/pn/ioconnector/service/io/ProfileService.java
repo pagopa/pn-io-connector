@@ -30,7 +30,8 @@ public class ProfileService {
                         GetProfileResponse.StatusEnum.SENDER_ALLOWED :
                         GetProfileResponse.StatusEnum.SENDER_NOT_ALLOWED
             );
-            getProfileResponse.setPreferredLanguages(lp.getPreferredLanguages());
+            getProfileResponse.setPreferredLanguages(lp.getSenderAllowed() ? lp.getPreferredLanguages() : null);
+            log.logEndingProcess(GET_IO_PROFILE);
             return getProfileResponse;
         } catch (Exception e) {
             log.logEndingProcess(GET_IO_PROFILE, false, e.getMessage(), e);

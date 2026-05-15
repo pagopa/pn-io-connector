@@ -9,7 +9,7 @@ public class PnIOGetProfileException extends PnRuntimeException {
 
     public PnIOGetProfileException(int statusCode, String detail) {
         super(
-            "GET/profile Error", "Errore in fase di GET/profile su IO", statusCode, ERROR_CODE_IOCONNECTOR_GET_USER_PROFILE_ERROR, "GET/profile", detail
+            "POST/profile Error", "Errore in fase di POST/profile su IO", statusCode, ERROR_CODE_IOCONNECTOR_GET_USER_PROFILE_ERROR, "POST/profile", detail
         );
     }
 

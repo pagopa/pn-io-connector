@@ -26,6 +26,11 @@ public class IOService {
         try {
             limitedProfile = ioClient.checkUserProfile(fiscalCodePayload, apiKey);
         } catch (PnHttpResponseException e) {
+            if (e.getStatusCode() == 404) {
+                LimitedProfile notFound = new LimitedProfile();
+                notFound.setSenderAllowed(false);
+                return notFound;
+            }
             throw new PnIOGetProfileException(e.getStatusCode(), e.getMessage());
         }
         return limitedProfile;
