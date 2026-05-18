@@ -32,10 +32,9 @@ public class MsClientConfig {
         @Bean
         RecipientsApi recipientsApi(PnIoConnectorConfig config) {
             var apiClient = new it.pagopa.pn.ioconnector.generated.openapi.msclient.datavault.v1.ApiClient(
-                    initRestClient()
-                            .baseUrl(config.getDataVaultBaseUrl())
-                            .build()
+                    initRestClient().build()
             );
+            apiClient.setBasePath(config.getDataVaultBaseUrl());
             return new RecipientsApi(apiClient);
         }
     }
