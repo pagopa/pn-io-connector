@@ -6,6 +6,7 @@ import it.pagopa.pn.commons.configs.aws.AwsServicesClientsConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 
@@ -20,7 +21,13 @@ public class AwsServicesClientsConfigActivation extends AwsServicesClientsConfig
 
     @Bean
     public SecretsManagerClient secretsManagerClient(AwsConfigs awsConfig) {
-        var builder = SecretsManagerClient.builder().region(Region.of(awsConfig.getRegionCode()));
+        var builder = SecretsManagerClient.builder();
+        if (StringUtils.hasText(awsConfig.getProfileName())) {
+            builder.credentialsProvider(ProfileCredentialsProvider.create(awsConfig.getProfileName()));
+        }
+        if (StringUtils.hasText(awsConfig.getRegionCode())) {
+            builder.region(Region.of(awsConfig.getRegionCode()));
+        }
         if (StringUtils.hasText(awsConfig.getEndpointUrl())) {
             builder.endpointOverride(URI.create(awsConfig.getEndpointUrl()));
         }

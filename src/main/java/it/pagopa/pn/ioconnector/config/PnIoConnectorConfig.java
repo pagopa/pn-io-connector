@@ -3,6 +3,8 @@ package it.pagopa.pn.ioconnector.config;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import it.pagopa.pn.commons.conf.SharedAutoConfiguration;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -37,7 +39,8 @@ public class PnIoConnectorConfig {
                 new TypeReference<>() {}
             );
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to parse Secrets Manager secret: " + secretsName, e);
+            throw new PnInternalException("Failed to retrieve value from Secrets Manager: " + secretsName,
+                    PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_SECRETSMANAGER_ERROR, e);
         }
         return apiKeyUseMap;
     }
