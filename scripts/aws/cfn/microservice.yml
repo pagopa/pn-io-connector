@@ -160,6 +160,14 @@ Parameters:
     Type: String
     Default: ''
 
+  IOConnectorRequestsTableName:
+    Type: String
+    Description: 'Name of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
+
+  IOConnectorRequestsTableArn:
+    Type: String
+    Description: 'ARN of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -188,6 +196,7 @@ Resources:
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
+        ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${IOConnectorRequestsTableName}'
         MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref SubnetsIds
@@ -218,3 +227,13 @@ Resources:
               - ssm:GetParameters
               - ssm:GetParametersByPath
             Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/io-connector/*'
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:Query
+            Resource:
+              - !Ref IOConnectorRequestsTableArn
+              - !Sub '${IOConnectorRequestsTableArn}/index/*'

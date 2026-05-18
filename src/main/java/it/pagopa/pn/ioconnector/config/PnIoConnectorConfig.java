@@ -13,4 +13,5 @@ import org.springframework.context.annotation.Import;
 public class PnIoConnectorConfig {
     private String ioBaseUrl;
     private String dataVaultBaseUrl;
+    private String dynamodbTableName;
 }
