@@ -12,8 +12,6 @@ import org.springframework.http.HttpStatus;
 
 import java.util.List;
 import java.util.NoSuchElementException;
-
-import static it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_DATAVAULT_DEANONYMIZE_ERROR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
@@ -55,7 +53,7 @@ class DataVaultServiceTest {
         when(dataVaultClient.deanonymize(INTERNAL_ID)).thenReturn(List.of());
 
         assertThatThrownBy(() -> dataVaultService.deanonymize(INTERNAL_ID))
-                .isInstanceOf(NoSuchElementException.class);
+                .isInstanceOf(PnDataVaultException.class);
     }
 
     @Test
@@ -63,7 +61,7 @@ class DataVaultServiceTest {
         when(dataVaultClient.deanonymize(INTERNAL_ID)).thenReturn(List.of(buildRecipient("INTERNAL-OTHER", TAX_ID)));
 
         assertThatThrownBy(() -> dataVaultService.deanonymize(INTERNAL_ID))
-                .isInstanceOf(NoSuchElementException.class);
+                .isInstanceOf(PnDataVaultException.class);
     }
 
     @Test
