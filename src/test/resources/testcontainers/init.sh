@@ -13,6 +13,10 @@ DYNAMODB_TABLES=(
   "pn-IOConnectorRequests:requestId"
 )
 
+SQS_QUEUES=(
+  "pn-io-connector-send-queue"
+)
+
 ## LOGGING FUNCTIONS ##
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -103,8 +107,36 @@ initialize_dynamo() {
   return $return_code
 }
 
+create_sqs_queue() {
+  local queue_name=$1
+
+  log "Creating SQS queue: $queue_name"
+  if ! aws sqs create-queue \
+    --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" \
+    --endpoint-url "$LOCALSTACK_ENDPOINT" \
+    --queue-name "$queue_name" ; then
+    log "Failed to create queue: $queue_name"
+    return 1
+  else
+    log "Queue created: $queue_name"
+  fi
+}
+
+initialize_sqs() {
+  log "Initializing SQS queues"
+  local return_code=0
+
+  for queue_name in "${SQS_QUEUES[@]}"; do
+    create_sqs_queue "$queue_name" || { log "Failed to initialize queue: $queue_name"; return_code=1; }
+  done
+
+  return $return_code
+}
+
 main() {
   initialize_dynamo || { log "Failed to initialize DynamoDB"; exit 1; }
+  initialize_sqs || { log "Failed to initialize SQS"; exit 1; }
   log "Initialization completed successfully"
 }
 
