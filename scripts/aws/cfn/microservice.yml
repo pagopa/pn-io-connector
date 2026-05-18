@@ -234,8 +234,6 @@ Resources:
               - dynamodb:UpdateItem
               - dynamodb:DeleteItem
               - dynamodb:Query
-              - dynamodb:BatchGetItem
-              - dynamodb:BatchWriteItem
             Resource:
               - !Ref IOConnectorRequestsTableArn
               - !Sub '${IOConnectorRequestsTableArn}/index/*'
