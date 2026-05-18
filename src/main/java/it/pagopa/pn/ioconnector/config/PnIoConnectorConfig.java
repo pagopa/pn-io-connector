@@ -14,4 +14,5 @@ public class PnIoConnectorConfig {
     private String ioBaseUrl;
     private String dataVaultBaseUrl;
     private String dynamodbTableName;
+    private String sqsSendQueueName;
 }
