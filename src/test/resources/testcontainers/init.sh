@@ -12,6 +12,7 @@ LOCALSTACK_ENDPOINT="http://localhost:4566"
 DYNAMODB_TABLES=(
   "pn-IOConnectorRequests:requestId"
 )
+SECRETS_NAME="Pn-IO-Connector-Secrets"
 
 SQS_QUEUES=(
   "pn-io-connector-send-queue"
@@ -91,6 +92,33 @@ add_dynamodb_gsi() {
   log "GSI '$gsi_name' added to table: $table_name"
 }
 
+create_secret() {
+  local secret_name=$1
+  local secret_value=$2
+
+  log "Creating secret: $secret_name"
+  if ! silent aws secretsmanager describe-secret \
+    --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" \
+    --endpoint-url "$LOCALSTACK_ENDPOINT" \
+    --secret-id "$secret_name" ; then
+    aws secretsmanager create-secret \
+      --profile "$AWS_PROFILE" \
+      --region "$AWS_REGION" \
+      --endpoint-url "$LOCALSTACK_ENDPOINT" \
+      --name "$secret_name" \
+      --secret-string "$secret_value"
+    log "Secret created: $secret_name"
+  else
+    log "Secret already exists: $secret_name"
+  fi
+}
+
+initialize_secrets() {
+  log "Initializing Secrets Manager"
+  create_secret "$SECRETS_NAME" '{"io-api-key":"test-api-key"}' || return 1
+}
+
 initialize_dynamo() {
   log "Initializing DynamoDB tables"
   local return_code=0
@@ -136,6 +164,7 @@ initialize_sqs() {
 
 main() {
   initialize_dynamo || { log "Failed to initialize DynamoDB"; exit 1; }
+  initialize_secrets || { log "Failed to initialize Secrets Manager"; exit 1; }
   initialize_sqs || { log "Failed to initialize SQS"; exit 1; }
   log "Initialization completed successfully"
 }

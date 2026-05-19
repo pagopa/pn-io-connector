@@ -7,6 +7,8 @@ import it.pagopa.pn.ioconnector.middleware.msclient.IOClient;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.FiscalCodePayload;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.MessageContent;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.Payee;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.PaymentData;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ThirdPartyData;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
@@ -63,8 +65,6 @@ public class IOService {
     }
 
     public String getServiceUseKey(String senderTaxId, String serviceId) {
-        // TODO: recuperare la ApiKey MANAGE a partire dal senderTaxId
-        ioClient.getServiceUseKey(serviceId, null);
-        return "";
+        return ioClient.getServiceUseKey(serviceId, null);
     }
 }
