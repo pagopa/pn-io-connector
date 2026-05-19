@@ -33,8 +33,7 @@ public class IOClient extends BaseRestClient {
 
     public String sendMessage(NewMessage message, String apiKeyUse) {
         log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, "defaultIoApi.submitMessageforUserWithFiscalCodeInBody");
-        //TODO: utilizzare defaultIoApi
-        return null;
+        throw new UnsupportedOperationException("not implemented");
     }
 
     public ExternalMessageResponseWithContent getMessageStatus(String fiscalCode, String ioMessageId, String apiKeyUse) {

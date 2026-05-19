@@ -15,4 +15,6 @@ public class PnIoConnectorConfig {
     private String dataVaultBaseUrl;
     private String dynamodbTableName;
     private String sqsSendQueueName;
+    private String sqsPollingQueueName;
+    private String eventBridgeBusName;
 }
