@@ -17,8 +17,6 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static it.pagopa.pn.ioconnector.utils.LogUtils.GET_SERVICE_USE_KEY;
-
 @CustomLog
 @Component
 @RequiredArgsConstructor

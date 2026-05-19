@@ -215,7 +215,7 @@ Resources:
         LoadBalancerListenerArn: !Ref ApplicationLoadBalancerListenerArn
         LoadbalancerRulePriority: !Ref MicroserviceNumber
         AlbSecurityGroup: !Ref AlbSecurityGroup
-        TaskRoleManagedPolicyArn: !Ref IoConnectorMicroserviceTaskManagedPolicy
+        TaskRoleManagedPolicyArn: !Ref PnIoConnectorManagedPolicy
         EcsLogGroup: !Ref EcsLogGroup
         LogAlarmStrategyV1: !Ref LogAlarmStrategy
         ApplicativeEnvFileChecksum: !Ref ApplicativeEnvFileChecksum
@@ -225,20 +225,6 @@ Resources:
     Properties:
       Description: 'String'
       ManagedPolicyName: !Ref PnIoConnectorManagedPolicyName
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Sid: 'ReadFromSecretsManagerIOConnectorSecrets'
-            Action:
-              - 'secretsmanager:DescribeSecret'
-              - 'secretsmanager:GetSecretValue'
-            Resource:
-              - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]
-
-  IoConnectorMicroserviceTaskManagedPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
       PolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -263,3 +249,10 @@ Resources:
             Resource:
               - !Ref IOConnectorRequestsTableArn
               - !Sub '${IOConnectorRequestsTableArn}/index/*'
+          - Effect: Allow
+            Sid: 'ReadFromSecretsManagerIOConnectorSecrets'
+            Action:
+              - 'secretsmanager:DescribeSecret'
+              - 'secretsmanager:GetSecretValue'
+            Resource:
+              - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]

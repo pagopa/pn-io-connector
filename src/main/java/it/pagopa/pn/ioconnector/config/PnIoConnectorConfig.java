@@ -28,13 +28,13 @@ public class PnIoConnectorConfig {
     private String secretsName;
 
     @Bean
-    public Map<String, String> apiKeyUseSecrets(SecretsManagerClient secretsManagerClient) {
+    public Map<String, String> apiKeyUseSecrets(SecretsManagerClient secretsManagerClient, ObjectMapper objectMapper) {
         Map<String, String> apiKeyUseMap = new HashMap<>();
         GetSecretValueResponse getSecretValueResponse;
         GetSecretValueRequest getSecretValueRequest = GetSecretValueRequest.builder().secretId(secretsName).build();
         try {
             getSecretValueResponse = secretsManagerClient.getSecretValue(getSecretValueRequest);
-            apiKeyUseMap = new ObjectMapper().readValue(
+            apiKeyUseMap = objectMapper.readValue(
                 getSecretValueResponse.secretString(),
                 new TypeReference<>() {}
             );
