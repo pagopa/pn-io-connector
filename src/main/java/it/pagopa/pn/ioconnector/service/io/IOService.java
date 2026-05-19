@@ -42,12 +42,25 @@ public class IOService {
         MessageContent content = new MessageContent();
         content.setSubject(request.getSubject());
         content.setMarkdown(request.getMarkdown());
+        content.setDueDate(request.getDueDate());
 
         if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
             ThirdPartyData thirdPartyData = new ThirdPartyData();
             thirdPartyData.setId(request.getRequestId());
             thirdPartyData.setHasAttachments(true);
             content.setThirdPartyData(thirdPartyData);
+        }
+
+        if (request.getPaymentData() != null) {
+            MessageSendRequest.PaymentData pd = request.getPaymentData();
+            Payee payee = new Payee();
+            payee.setFiscalCode(pd.getCreditorTaxId());
+            PaymentData paymentData = new PaymentData();
+            paymentData.setAmount(pd.getAmount());
+            paymentData.setNoticeNumber(pd.getNoticeCode());
+            paymentData.setInvalidAfterDueDate(pd.getInvalidAfterDueDate());
+            paymentData.setPayee(payee);
+            content.setPaymentData(paymentData);
         }
 
         NewMessage newMessage = new NewMessage();

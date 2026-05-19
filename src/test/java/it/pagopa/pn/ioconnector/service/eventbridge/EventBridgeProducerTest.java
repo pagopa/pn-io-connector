@@ -1,4 +1,4 @@
-package it.pagopa.pn.ioconnector.middleware.queue.producer;
+package it.pagopa.pn.ioconnector.service.eventbridge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -23,7 +23,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class EventBridgePublisherTest {
+class EventBridgeProducerTest {
 
     @Mock private EventBridgeClient eventBridgeClient;
     @Mock private PnIoConnectorConfig config;
@@ -31,7 +31,7 @@ class EventBridgePublisherTest {
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
-    @InjectMocks private EventBridgePublisher eventBridgePublisher;
+    @InjectMocks private EventBridgeProducer eventBridgeProducer;
 
     @Test
     void publish_invokesEventBridgeWithCorrectParams() {
@@ -46,7 +46,7 @@ class EventBridgePublisherTest {
                 .eventType(EventType.SENT_TO_IO)
                 .build();
 
-        eventBridgePublisher.publish(event);
+        eventBridgeProducer.publish(event);
 
         ArgumentCaptor<PutEventsRequest> captor = ArgumentCaptor.forClass(PutEventsRequest.class);
         verify(eventBridgeClient).putEvents(captor.capture());

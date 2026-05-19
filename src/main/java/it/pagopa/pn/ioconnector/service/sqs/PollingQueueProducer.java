@@ -1,9 +1,12 @@
-package it.pagopa.pn.ioconnector.middleware.queue.producer;
+package it.pagopa.pn.ioconnector.service.sqs;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.model.OutcomePollingRequest;
+
+import static it.pagopa.pn.commons.exceptions.PnExceptionsCodes.ERROR_CODE_PN_GENERIC_ERROR;
 import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -12,13 +15,13 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 @Component
 @CustomLog
-public class PollingQueuePublisher {
+public class PollingQueueProducer {
 
     private final SqsClient sqsClient;
     private final PnIoConnectorConfig config;
     private final ObjectMapper objectMapper;
 
-    public PollingQueuePublisher(SqsClient sqsClient, PnIoConnectorConfig config, ObjectMapper objectMapper) {
+    public PollingQueueProducer(SqsClient sqsClient, PnIoConnectorConfig config, ObjectMapper objectMapper) {
         this.sqsClient = sqsClient;
         this.config = config;
         this.objectMapper = objectMapper;
@@ -29,7 +32,7 @@ public class PollingQueuePublisher {
         try {
             messageBody = objectMapper.writeValueAsString(request);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to serialize OutcomePollingRequest", e);
+            throw new PnInternalException("Failed to serialize OutcomePollingRequest", ERROR_CODE_PN_GENERIC_ERROR, e);
         }
         GetQueueUrlRequest getQueueUrlRequest = GetQueueUrlRequest.builder()
                 .queueName(config.getSqsPollingQueueName())

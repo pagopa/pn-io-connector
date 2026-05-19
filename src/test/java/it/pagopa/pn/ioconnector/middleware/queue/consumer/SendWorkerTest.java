@@ -3,8 +3,8 @@ package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
-import it.pagopa.pn.ioconnector.middleware.queue.producer.EventBridgePublisher;
-import it.pagopa.pn.ioconnector.middleware.queue.producer.PollingQueuePublisher;
+import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
+import it.pagopa.pn.ioconnector.service.sqs.PollingQueueProducer;
 import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
@@ -35,8 +35,8 @@ class SendWorkerTest {
 
     @Mock private IOService ioService;
     @Mock private IOConnectorRequestDao dao;
-    @Mock private EventBridgePublisher eventBridgePublisher;
-    @Mock private PollingQueuePublisher pollingQueuePublisher;
+    @Mock private EventBridgeProducer eventBridgeProducer;
+    @Mock private PollingQueueProducer pollingQueueProducer;
 
     @InjectMocks private SendWorker sendWorker;
 
@@ -55,11 +55,11 @@ class SendWorkerTest {
         assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.SENDER_NOT_ALLOWED.name());
 
         ArgumentCaptor<OutcomeEvent> eventCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
-        verify(eventBridgePublisher).publish(eventCaptor.capture());
+        verify(eventBridgeProducer).publish(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.SENDER_NOT_ALLOWED);
 
         verify(ioService, never()).sendMessage(any(), any());
-        verify(pollingQueuePublisher, never()).publish(any());
+        verify(pollingQueueProducer, never()).publish(any());
     }
 
     @Test
@@ -76,11 +76,11 @@ class SendWorkerTest {
         assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.SENDER_NOT_ALLOWED.name());
 
         ArgumentCaptor<OutcomeEvent> eventCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
-        verify(eventBridgePublisher).publish(eventCaptor.capture());
+        verify(eventBridgeProducer).publish(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.SENDER_NOT_ALLOWED);
 
         verify(ioService, never()).sendMessage(any(), any());
-        verify(pollingQueuePublisher, never()).publish(any());
+        verify(pollingQueueProducer, never()).publish(any());
     }
 
     @Test
@@ -100,10 +100,10 @@ class SendWorkerTest {
         assertThat(entityCaptor.getValue().getIoMessageId()).isEqualTo("IO-MSG-001");
 
         ArgumentCaptor<OutcomeEvent> eventCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
-        verify(eventBridgePublisher).publish(eventCaptor.capture());
+        verify(eventBridgeProducer).publish(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.SENT_TO_IO);
 
-        verify(pollingQueuePublisher).publish(any(OutcomePollingRequest.class));
+        verify(pollingQueueProducer).publish(any(OutcomePollingRequest.class));
     }
 
     @Test
@@ -121,7 +121,7 @@ class SendWorkerTest {
                 .hasMessage("IO 500");
 
         verify(dao, never()).update(any());
-        verify(eventBridgePublisher, never()).publish(any());
+        verify(eventBridgeProducer, never()).publish(any());
     }
 
     @Test
@@ -142,7 +142,7 @@ class SendWorkerTest {
         sendWorker.process(request);
 
         ArgumentCaptor<OutcomePollingRequest> pollingCaptor = ArgumentCaptor.forClass(OutcomePollingRequest.class);
-        verify(pollingQueuePublisher).publish(pollingCaptor.capture());
+        verify(pollingQueueProducer).publish(pollingCaptor.capture());
         assertThat(pollingCaptor.getValue().isPaymentData()).isTrue();
     }
 

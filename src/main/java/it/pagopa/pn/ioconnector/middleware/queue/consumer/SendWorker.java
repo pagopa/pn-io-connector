@@ -4,8 +4,8 @@ import io.awspring.cloud.sqs.annotation.SqsListener;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
-import it.pagopa.pn.ioconnector.middleware.queue.producer.EventBridgePublisher;
-import it.pagopa.pn.ioconnector.middleware.queue.producer.PollingQueuePublisher;
+import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
+import it.pagopa.pn.ioconnector.service.sqs.PollingQueueProducer;
 import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
@@ -25,8 +25,8 @@ public class SendWorker {
 
     private final IOService ioService;
     private final IOConnectorRequestDao dao;
-    private final EventBridgePublisher eventBridgePublisher;
-    private final PollingQueuePublisher pollingQueuePublisher;
+    private final EventBridgeProducer eventBridgeProducer;
+    private final PollingQueueProducer pollingQueueProducer;
 
     @SqsListener(value = "${pn.io-connector.sqs-send-queue-name}")
     public void process(MessageSendRequest request) {
@@ -64,7 +64,7 @@ public class SendWorker {
                 .eventType(EventType.SENT_TO_IO)
                 .eventTimestamp(Instant.now())
                 .build();
-        eventBridgePublisher.publish(outcomeEvent);
+        eventBridgeProducer.publish(outcomeEvent);
 
         OutcomePollingRequest pollingRequest = OutcomePollingRequest.builder()
                 .requestId(request.getRequestId())
@@ -76,7 +76,7 @@ public class SendWorker {
                 .paymentData(request.getPaymentData() != null)
                 .pollingMaxDate(request.getPollingMaxDate())
                 .build();
-        pollingQueuePublisher.publish(pollingRequest);
+        pollingQueueProducer.publish(pollingRequest);
     }
 
     private void handleSenderNotAllowed(MessageSendRequest request) {
@@ -92,6 +92,6 @@ public class SendWorker {
                 .eventType(EventType.SENDER_NOT_ALLOWED)
                 .eventTimestamp(Instant.now())
                 .build();
-        eventBridgePublisher.publish(outcomeEvent);
+        eventBridgeProducer.publish(outcomeEvent);
     }
 }

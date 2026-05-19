@@ -1,9 +1,12 @@
-package it.pagopa.pn.ioconnector.middleware.queue.producer;
+package it.pagopa.pn.ioconnector.service.eventbridge;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
+
+import static it.pagopa.pn.commons.exceptions.PnExceptionsCodes.ERROR_CODE_PN_GENERIC_ERROR;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -16,7 +19,7 @@ import java.time.Instant;
 @Component
 @CustomLog
 @RequiredArgsConstructor
-public class EventBridgePublisher {
+public class EventBridgeProducer {
 
     private final EventBridgeClient eventBridgeClient;
     private final PnIoConnectorConfig config;
@@ -28,7 +31,7 @@ public class EventBridgePublisher {
         try {
             detail = objectMapper.writeValueAsString(event);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to serialize OutcomeEvent", e);
+            throw new PnInternalException("Failed to serialize OutcomeEvent", ERROR_CODE_PN_GENERIC_ERROR, e);
         }
         PutEventsRequestEntry entry = PutEventsRequestEntry.builder()
                 .eventBusName(config.getEventBridgeBusName())

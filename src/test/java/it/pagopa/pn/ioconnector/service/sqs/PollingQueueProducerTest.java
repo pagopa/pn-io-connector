@@ -1,4 +1,4 @@
-package it.pagopa.pn.ioconnector.middleware.queue.producer;
+package it.pagopa.pn.ioconnector.service.sqs;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -27,7 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class PollingQueuePublisherTest {
+class PollingQueueProducerTest {
 
     @Mock private SqsClient sqsClient;
     @Mock private PnIoConnectorConfig config;
@@ -35,7 +35,7 @@ class PollingQueuePublisherTest {
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
-    @InjectMocks private PollingQueuePublisher pollingQueuePublisher;
+    @InjectMocks private PollingQueueProducer pollingQueueProducer;
 
     @Test
     void publish_serializesAndSendsToCorrectQueue() {
@@ -54,7 +54,7 @@ class PollingQueuePublisherTest {
                 .pollingMaxDate(Instant.now().plusSeconds(3600))
                 .build();
 
-        pollingQueuePublisher.publish(request);
+        pollingQueueProducer.publish(request);
 
         ArgumentCaptor<SendMessageRequest> captor = ArgumentCaptor.forClass(SendMessageRequest.class);
         verify(sqsClient).sendMessage(captor.capture());
