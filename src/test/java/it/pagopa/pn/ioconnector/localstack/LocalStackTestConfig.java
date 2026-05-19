@@ -30,6 +30,7 @@ public class LocalStackTestConfig {
         localStack.start();
         System.setProperty("aws.endpoint-url", localStack.getEndpointOverride(DYNAMODB).toString());
         System.setProperty("test.aws.dynamodb.endpoint", localStack.getEndpointOverride(DYNAMODB).toString());
+        System.setProperty("aws.endpoint-url-sqs", localStack.getEndpointOverride(SQS).toString());
         try {
             System.setProperty("aws.sharedCredentialsFile",
                     new ClassPathResource("testcontainers/credentials").getFile().getAbsolutePath());
