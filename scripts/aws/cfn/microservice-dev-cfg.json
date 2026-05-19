@@ -1,3 +1,5 @@
 {
-  "Parameters" : {}
+  "Parameters" : {
+    "PnIoConnectorSecretsName":"Pn-Io-Connector-Secrets"
+  }
 }
