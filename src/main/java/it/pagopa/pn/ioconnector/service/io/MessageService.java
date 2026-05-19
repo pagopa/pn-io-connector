@@ -1,6 +1,7 @@
 package it.pagopa.pn.ioconnector.service.io;
 
-import java.io.UncheckedIOException;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -70,7 +71,8 @@ public class MessageService {
             try {
                 messageBody = objectMapper.writeValueAsString(sqsMsg);
             } catch (JsonProcessingException e) {
-                throw new UncheckedIOException(e);
+                throw new PnInternalException("Failed to serialize SQS message",
+                        PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_MESSAGE_SERIALIZATION_ERROR, e);
             }
             String queueUrl = sqsClient.getQueueUrl(r -> r.queueName(config.getSqsSendQueueName())).queueUrl();
             sqsClient.sendMessage(r -> r.queueUrl(queueUrl).messageBody(messageBody));
