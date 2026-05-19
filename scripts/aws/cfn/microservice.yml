@@ -168,6 +168,14 @@ Parameters:
     Type: String
     Description: 'ARN of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
 
+  IoConnectorSendQueueName:
+    Type: String
+    Description: 'Name of SQS queue pn-io-connector-send-queue (from storage.yml output)'
+
+  IoConnectorSendQueueArn:
+    Type: String
+    Description: 'ARN of SQS queue pn-io-connector-send-queue (from storage.yml output)'
+
   PnIoConnectorSecretsName:
     Type: String
     Description: 'Secret ID for IO Api'
@@ -207,6 +215,7 @@ Resources:
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
         ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${IOConnectorRequestsTableName}'
         ContainerEnvEntry5: !Sub 'PN_IO_CONNECTOR_SECRETS_NAME=${PnIoConnectorSecretsName}'
+        ContainerEnvEntry5: !Sub 'PN_IO_CONNECTOR_SQS_SEND_QUEUE_NAME=${IoConnectorSendQueueName}'
         MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref SubnetsIds
@@ -256,3 +265,10 @@ Resources:
               - 'secretsmanager:GetSecretValue'
             Resource:
               - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]
+
+          - Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+            Resource: !Ref IoConnectorSendQueueArn

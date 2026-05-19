@@ -64,6 +64,22 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
+  # ── SQS ───────────────────────────────────────────────────────────────────
+
+  PnIoConnectorSendQueueStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/sqs-queue.yaml'
+      Parameters:
+        QueueName: !Sub '${ProjectName}-io-connector-send-queue'
+        HasDLQ: 'true'
+        MessageRetentionPeriod: 1209600
+        QueueHasAlarm: 'false'
+        AlarmSNSTopicName: !Ref AlarmSNSTopicName
+        VisibilityTimeout: 60
+
   # ── Log Group ──────────────────────────────────────────────────────────────
 
   PnIoConnectorLogGroup:
@@ -87,6 +103,15 @@ Outputs:
   IOConnectorRequestsTableArn:
     Value: !GetAtt PnIOConnectorRequestsTable.Arn
     Description: pn-IOConnectorRequests DynamoDB table ARN
+
+  # SQS
+  IoConnectorSendQueueName:
+    Value: !GetAtt PnIoConnectorSendQueueStack.Outputs.QueueName
+    Description: pn-io-connector-send-queue name
+
+  IoConnectorSendQueueArn:
+    Value: !GetAtt PnIoConnectorSendQueueStack.Outputs.QueueARN
+    Description: pn-io-connector-send-queue ARN
 
   # Log Group
   EcsLogGroup:
