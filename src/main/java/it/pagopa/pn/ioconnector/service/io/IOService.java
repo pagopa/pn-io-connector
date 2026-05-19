@@ -60,7 +60,7 @@ public class IOService {
         return new PaymentData()
                 .amount(pd.getAmount())
                 .noticeNumber(pd.getNoticeCode())
-                .invalidAfterDueDate(pd.getInvalidAfterDueDate() != null ? pd.getInvalidAfterDueDate() : true)
+                .invalidAfterDueDate(pd.getInvalidAfterDueDate())
                 .payee(new Payee().fiscalCode(pd.getCreditorTaxId()));
     }
 

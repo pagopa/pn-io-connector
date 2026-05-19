@@ -84,5 +84,6 @@ class IOServiceTest {
         verify(ioClient).sendMessage(captor.capture(), eq(API_KEY));
 
         assertThat(captor.getValue().getContent().getPaymentData()).isNull();
+        assertThat(captor.getValue().getContent().getDueDate()).isEqualTo("2026-06-30T23:59:59Z");
     }
 }

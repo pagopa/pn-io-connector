@@ -60,7 +60,7 @@ class IOClientTest {
         assertThatThrownBy(() -> ioClient.sendMessage(new NewMessage(), API_KEY))
             .isInstanceOf(PnInternalException.class)
             .satisfies(e -> assertThat(((PnInternalException) e).getProblem().getErrors().get(0).getCode())
-                .isEqualTo(PnIoConnectorExceptionCodes.PN_IO_CONNECTOR_IO_RECIPIENT_NOT_FOUND));
+                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_RECIPIENT_NOT_FOUND));
     }
 
     @Test
@@ -71,7 +71,7 @@ class IOClientTest {
         assertThatThrownBy(() -> ioClient.sendMessage(new NewMessage(), API_KEY))
             .isInstanceOf(PnInternalException.class)
             .satisfies(e -> assertThat(((PnInternalException) e).getProblem().getErrors().get(0).getCode())
-                .isEqualTo(PnIoConnectorExceptionCodes.PN_IO_CONNECTOR_IO_RATE_LIMIT));
+                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_RATE_LIMIT));
     }
 
     @Test
@@ -82,6 +82,17 @@ class IOClientTest {
         assertThatThrownBy(() -> ioClient.sendMessage(new NewMessage(), API_KEY))
             .isInstanceOf(PnInternalException.class)
             .satisfies(e -> assertThat(((PnInternalException) e).getProblem().getErrors().get(0).getCode())
-                .isEqualTo(PnIoConnectorExceptionCodes.PN_IO_CONNECTOR_IO_SERVER_ERROR));
+                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_SERVER_ERROR));
+    }
+
+    @Test
+    void sendMessage_throws_on400() {
+        when(mockDefaultApi.submitMessageforUserWithFiscalCodeInBody(any()))
+            .thenThrow(new RestClientResponseException("Bad Request", 400, "Bad Request", null, null, null));
+
+        assertThatThrownBy(() -> ioClient.sendMessage(new NewMessage(), API_KEY))
+            .isInstanceOf(PnInternalException.class)
+            .satisfies(e -> assertThat(((PnInternalException) e).getProblem().getErrors().get(0).getCode())
+                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_SERVER_ERROR));
     }
 }

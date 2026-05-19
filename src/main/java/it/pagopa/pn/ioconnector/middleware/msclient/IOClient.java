@@ -44,13 +44,16 @@ public class IOClient extends BaseRestClient {
             int status = ex.getStatusCode().value();
             if (status == 404) {
                 throw new PnInternalException("IO recipient not found",
-                        PnIoConnectorExceptionCodes.PN_IO_CONNECTOR_IO_RECIPIENT_NOT_FOUND, ex);
+                        PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_RECIPIENT_NOT_FOUND, ex);
             } else if (status == 429) {
                 throw new PnInternalException("IO rate limit exceeded",
-                        PnIoConnectorExceptionCodes.PN_IO_CONNECTOR_IO_RATE_LIMIT, ex);
-            } else {
+                        PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_RATE_LIMIT, ex);
+            } else if (status >= 500) {
                 throw new PnInternalException("IO server error",
-                        PnIoConnectorExceptionCodes.PN_IO_CONNECTOR_IO_SERVER_ERROR, ex);
+                        PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_SERVER_ERROR, ex);
+            } else {
+                throw new PnInternalException("IO unexpected client error (status=" + status + ")",
+                        PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_SERVER_ERROR, ex);
             }
         }
     }
