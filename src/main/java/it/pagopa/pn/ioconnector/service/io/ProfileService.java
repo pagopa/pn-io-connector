@@ -21,7 +21,7 @@ public class ProfileService {
     public GetProfileResponse getProfile(GetProfileRequest request) {
         log.logStartingProcess(GET_IO_PROFILE);
         try {
-            String apiKeyUse = ioService.getServiceUseKey(request.getSenderTaxId(), request.getSenderServiceId());
+            String apiKeyUse = ioService.getServiceUseKey(request.getSenderServiceId());
             String taxId = dataVaultService.deanonymize(request.getRecipientTaxId());
             LimitedProfile lp = ioService.checkUserProfile(taxId, apiKeyUse);
             GetProfileResponse getProfileResponse = new GetProfileResponse();
@@ -40,7 +40,7 @@ public class ProfileService {
     }
 
     public boolean resolveProfile(String serviceId, String recipientTaxId) {
-        String apiKeyUse = ioService.getServiceUseKey(null, serviceId);
+        String apiKeyUse = ioService.getServiceUseKey(serviceId);
         String taxId = dataVaultService.deanonymize(recipientTaxId);
         LimitedProfile lp =  ioService.checkUserProfile(taxId, apiKeyUse);
         return lp.getSenderAllowed();

@@ -28,7 +28,6 @@ class MessageServiceTest {
             .requestId("REQ-001")
             .iun("IUN-001")
             .recipientTaxId("ANON-TAX")
-            .senderTaxId("SENDER-TAX")
             .senderServiceId("SVC-001")
             .subject("Test")
             .markdown("body");
