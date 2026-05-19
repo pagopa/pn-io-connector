@@ -94,7 +94,9 @@ public class MessageService {
                 .xPagopaIoConCxId(cxId)
                 .iun(sqsMsg.getIun())
                 .status("ACCEPTED")
-                .pollingMaxDate(Instant.now().plus(request.getPollingMaxHours(), ChronoUnit.HOURS).toString())
+                .pollingMaxDate(Instant.now().plus(
+                        request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48,
+                        ChronoUnit.HOURS).toString())
                 .eventList(List.of(
                         IOConnectorRequestEntity.Event.builder()
                                 .eventDate(Instant.now().toString())

@@ -6,6 +6,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
 import it.pagopa.pn.ioconnector.localstack.LocalStackTestConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +33,12 @@ class MessageServiceIntegrationTest {
 
     @Autowired
     private PnIoConnectorConfig config;
+
+    @BeforeEach
+    void purgeQueue() {
+        String queueUrl = sqsClient.getQueueUrl(r -> r.queueName(config.getSqsSendQueueName())).queueUrl();
+        sqsClient.purgeQueue(r -> r.queueUrl(queueUrl));
+    }
 
     @Test
     void handleSendRequest_savesAcceptedRecordAndPublishesToSqs() {
