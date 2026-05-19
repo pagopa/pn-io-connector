@@ -29,7 +29,7 @@ class ProfileServiceTest {
 
     @Test
     void getProfile_senderAllowed() {
-        when(ioService.getServiceUseKey("SENDER-TAX", "SVC-001")).thenReturn("key");
+        when(ioService.getServiceUseKey("SVC-001")).thenReturn("key");
         when(dataVaultService.deanonymize("ANON-TAX")).thenReturn("CF");
         when(ioService.checkUserProfile("CF", "key")).thenReturn(new LimitedProfile().senderAllowed(true));
 
@@ -40,7 +40,7 @@ class ProfileServiceTest {
 
     @Test
     void getProfile_senderNotAllowed() {
-        when(ioService.getServiceUseKey("SENDER-TAX", "SVC-001")).thenReturn("key");
+        when(ioService.getServiceUseKey("SVC-001")).thenReturn("key");
         when(dataVaultService.deanonymize("ANON-TAX")).thenReturn("CF");
         when(ioService.checkUserProfile("CF", "key")).thenReturn(new LimitedProfile().senderAllowed(false));
 
@@ -51,7 +51,7 @@ class ProfileServiceTest {
 
     @Test
     void getProfile_throwsError() {
-        when(ioService.getServiceUseKey("SENDER-TAX", "SVC-001")).thenThrow(
+        when(ioService.getServiceUseKey("SVC-001")).thenThrow(
             new PnRuntimeException("IO error", "IO error", HttpStatus.INTERNAL_SERVER_ERROR.value(), new ArrayList<>())
         );
 
@@ -62,7 +62,7 @@ class ProfileServiceTest {
 
     @Test
     void getProfile_senderAllowed_withPreferredLanguages() {
-        when(ioService.getServiceUseKey("SENDER-TAX", "SVC-001")).thenReturn("key");
+        when(ioService.getServiceUseKey("SVC-001")).thenReturn("key");
         when(dataVaultService.deanonymize("ANON-TAX")).thenReturn("CF");
         when(ioService.checkUserProfile("CF", "key"))
                 .thenReturn(new LimitedProfile().senderAllowed(true).preferredLanguages(List.of("it_IT", "en_US")));
@@ -75,7 +75,6 @@ class ProfileServiceTest {
     private GetProfileRequest buildRequest() {
         return new GetProfileRequest()
             .recipientTaxId("ANON-TAX")
-            .senderTaxId("SENDER-TAX")
             .senderServiceId("SVC-001");
     }
 }

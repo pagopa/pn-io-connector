@@ -138,7 +138,6 @@ components:
       required:
         - requestId
         - recipientTaxId
-        - senderTaxId
         - senderServiceId
         - subject
         - markdown
@@ -155,10 +154,6 @@ components:
           type: string
           description: Codice fiscale anonimizzato del destinatario del messaggio.
           example: "ABCDEFG1234567890"
-        senderTaxId:
-          type: string
-          description: Codice fiscale dell'ente che invia il messaggio.
-          example: "12345678901"
         senderServiceId:
           type: string
           description: Id del servizio per il quale si invia una notifica.
@@ -234,18 +229,12 @@ components:
       type: object
       required:
         - recipientTaxId
-        - senderTaxId
         - senderServiceId
       properties:
         recipientTaxId:
           type: string
           description: Codice fiscale anonimizzato del destinatario.
           example: "ABCDEFG1234567890"
-        senderTaxId:
-          type: string
-          description: >
-            Codice fiscale dell'ente mittente. Necessario per recuperare la ApiKey MANAGE.
-          example: "12345678901"
         senderServiceId:
           type: string
           description: >

@@ -43,7 +43,6 @@ public class MessageService {
                 .xPagopaIoConCxId(cxId)
                 .iun(request.getIun())
                 .recipientTaxId(request.getRecipientTaxId())
-                .senderTaxId(request.getSenderTaxId())
                 .senderServiceId(request.getSenderServiceId())
                 .subject(request.getSubject())
                 .markdown(request.getMarkdown())
