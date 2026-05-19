@@ -1,10 +1,16 @@
 package it.pagopa.pn.ioconnector.middleware.msclient;
 
+import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.commons.log.PnLogger;
+import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.datavault.v1.api.RecipientsApi;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.datavault.v1.dto.BaseRecipientDto;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.Collections;
+import java.util.List;
 
 @CustomLog
 @Component
@@ -13,8 +19,13 @@ public class DataVaultClient {
 
     private final RecipientsApi recipientsApi;
 
-    public String deanonymize(String internalId) {
+    public List<BaseRecipientDto> deanonymize(String internalId) {
         log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.PN_DATA_VAULT, "recipientsApi");
-        return internalId;
+        List<String> internalIdParam = Collections.singletonList(internalId);
+        try {
+            return recipientsApi.getRecipientDenominationByInternalId(internalIdParam);
+        } catch (PnHttpResponseException e) {
+            throw new PnDataVaultException(e.getStatusCode(), e.getMessage());
+        }
     }
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
+import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +24,7 @@ class MessageServiceTest {
     @Mock private SqsClient sqsClient;
     @Mock private ObjectMapper objectMapper;
     @Mock private PnIoConnectorConfig config;
+    @Mock private IOConnectorRequestDao requestDao;
 
     @InjectMocks private MessageService messageService;
 

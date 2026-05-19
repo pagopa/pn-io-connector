@@ -1,19 +1,24 @@
 package it.pagopa.pn.ioconnector.service.io;
 
+import java.io.UncheckedIOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
-import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
-import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
-import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
-import java.io.UncheckedIOException;
-import java.time.Instant;
+import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
+import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
+import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
+import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.HANDLE_SEND_REQUEST;
 
@@ -25,6 +30,7 @@ public class MessageService {
     private final SqsClient sqsClient;
     private final ObjectMapper objectMapper;
     private final PnIoConnectorConfig config;
+    private final IOConnectorRequestDao requestDao;
 
     public MessageResponse handleSendRequest(String cxId, MessageRequest request) {
         log.logStartingProcess(HANDLE_SEND_REQUEST);
@@ -58,6 +64,8 @@ public class MessageService {
                     sqsMsg.getIun(),
                     sqsMsg.getSenderServiceId());
 
+            requestDao.save(buildAcceptedEntity(cxId, sqsMsg, request));
+
             String messageBody;
             try {
                 messageBody = objectMapper.writeValueAsString(sqsMsg);
@@ -78,5 +86,24 @@ public class MessageService {
         } finally {
             MDC.remove("requestId");
         }
+    }
+
+    private IOConnectorRequestEntity buildAcceptedEntity(String cxId, MessageSendRequest sqsMsg, MessageRequest request) {
+        return IOConnectorRequestEntity.builder()
+                .requestId(sqsMsg.getRequestId())
+                .xPagopaIoConCxId(cxId)
+                .iun(sqsMsg.getIun())
+                .status("ACCEPTED")
+                .pollingMaxDate(Instant.now().plus(
+                        request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48,
+                        ChronoUnit.HOURS).toString())
+                .eventList(List.of(
+                        IOConnectorRequestEntity.Event.builder()
+                                .eventDate(Instant.now().toString())
+                                .status("ACCEPTED")
+                                .build()
+                ))
+                .createdAt(Instant.now().toString())
+                .build();
     }
 }
