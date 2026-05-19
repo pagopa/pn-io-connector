@@ -26,9 +26,9 @@ public class ProfileService {
             LimitedProfile lp = ioService.checkUserProfile(taxId, apiKeyUse);
             GetProfileResponse getProfileResponse = new GetProfileResponse();
             getProfileResponse.setStatus(
-                lp.getSenderAllowed() ?
-                        GetProfileResponse.StatusEnum.SENDER_ALLOWED :
-                        GetProfileResponse.StatusEnum.SENDER_NOT_ALLOWED
+                    lp.getSenderAllowed() ?
+                            GetProfileResponse.StatusEnum.SENDER_ALLOWED :
+                            GetProfileResponse.StatusEnum.SENDER_NOT_ALLOWED
             );
             getProfileResponse.setPreferredLanguages(lp.getSenderAllowed() ? lp.getPreferredLanguages() : null);
             log.logEndingProcess(GET_IO_PROFILE);
@@ -39,8 +39,8 @@ public class ProfileService {
         }
     }
 
-    public boolean resolveProfile(String senderTaxId, String senderServiceId, String recipientTaxId) {
-        String apiKeyUse = ioService.getServiceUseKey(senderTaxId, senderServiceId);
+    public boolean resolveProfile(String serviceId, String recipientTaxId) {
+        String apiKeyUse = ioService.getServiceUseKey(null, serviceId);
         String taxId = dataVaultService.deanonymize(recipientTaxId);
         LimitedProfile lp =  ioService.checkUserProfile(taxId, apiKeyUse);
         return lp.getSenderAllowed();

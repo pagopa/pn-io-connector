@@ -168,6 +168,15 @@ Parameters:
     Type: String
     Description: 'ARN of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
 
+  PnIoConnectorSecretsName:
+    Type: String
+    Description: 'Secret ID for IO Api'
+
+  PnIoConnectorManagedPolicyName:
+    Type: String
+    Description: 'Nome della managed policy associata ad IO Connector'
+    Default: 'PnIoConnectorManagedPolicyName'
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -197,6 +206,7 @@ Resources:
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
         ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${IOConnectorRequestsTableName}'
+        ContainerEnvEntry5: !Sub 'PN_IO_CONNECTOR_SECRETS_NAME=${PnIoConnectorSecretsName}'
         MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref SubnetsIds
@@ -205,14 +215,16 @@ Resources:
         LoadBalancerListenerArn: !Ref ApplicationLoadBalancerListenerArn
         LoadbalancerRulePriority: !Ref MicroserviceNumber
         AlbSecurityGroup: !Ref AlbSecurityGroup
-        TaskRoleManagedPolicyArn: !Ref IoConnectorMicroserviceTaskManagedPolicy
+        TaskRoleManagedPolicyArn: !Ref PnIoConnectorManagedPolicy
         EcsLogGroup: !Ref EcsLogGroup
         LogAlarmStrategyV1: !Ref LogAlarmStrategy
         ApplicativeEnvFileChecksum: !Ref ApplicativeEnvFileChecksum
 
-  IoConnectorMicroserviceTaskManagedPolicy:
+  PnIoConnectorManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
+      Description: 'String'
+      ManagedPolicyName: !Ref PnIoConnectorManagedPolicyName
       PolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -237,3 +249,10 @@ Resources:
             Resource:
               - !Ref IOConnectorRequestsTableArn
               - !Sub '${IOConnectorRequestsTableArn}/index/*'
+          - Effect: Allow
+            Sid: 'ReadFromSecretsManagerIOConnectorSecrets'
+            Action:
+              - 'secretsmanager:DescribeSecret'
+              - 'secretsmanager:GetSecretValue'
+            Resource:
+              - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]

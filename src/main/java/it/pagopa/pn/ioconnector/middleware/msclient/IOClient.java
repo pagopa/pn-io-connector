@@ -24,6 +24,7 @@ public class IOClient extends BaseRestClient {
 
     private final PnIoConnectorConfig config;
     private final ManageAuthorizationApi manageAuthorizationApi;
+    private final Map<String, String> apiKeyUseSecrets;
     private final Map<String, DefaultApi> defaultApiCache = new ConcurrentHashMap<>();
 
     public LimitedProfile checkUserProfile(FiscalCodePayload fiscalCodePayload, String apiKeyUse) {
@@ -44,9 +45,7 @@ public class IOClient extends BaseRestClient {
     }
 
     public String getServiceUseKey(String serviceId, String apiKeyManage) {
-        log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, "manageAuthorizationIoApi.cmsGetServiceKeys");
-        //TODO: utilizzare manageAuthorizationApi
-        return null;
+        return apiKeyUseSecrets.get(serviceId);
     }
 
     private DefaultApi defaultIoApi(String apiKeyUse) {
