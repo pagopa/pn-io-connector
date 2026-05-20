@@ -77,7 +77,7 @@ public class IOService {
         return null;
     }
 
-    public String getServiceUseKey(String senderTaxId, String serviceId) {
+    public String getServiceUseKey(String serviceId) {
         return ioClient.getServiceUseKey(serviceId, null);
     }
 }

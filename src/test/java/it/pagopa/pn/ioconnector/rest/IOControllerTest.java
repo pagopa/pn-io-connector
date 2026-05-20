@@ -166,7 +166,6 @@ class IOControllerTest {
                 .requestId("REQ-TEST-001")
                 .iun("ABCD-EFGH-1234-5678-X")
                 .recipientTaxId("ANON123456789")
-                .senderTaxId("12345678901")
                 .senderServiceId("000000000")
                 .subject("Notifica di test")
                 .markdown("Hai ricevuto una notifica di test.");
@@ -175,7 +174,6 @@ class IOControllerTest {
     private GetProfileRequest buildProfileRequest() {
         return new GetProfileRequest()
                 .recipientTaxId("ANON123456789")
-                .senderTaxId("12345678901")
                 .senderServiceId("000000000");
     }
 }

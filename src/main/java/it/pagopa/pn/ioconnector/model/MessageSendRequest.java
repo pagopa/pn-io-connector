@@ -18,7 +18,6 @@ public class MessageSendRequest {
     private String xPagopaIoConCxId;
     private String iun;
     private String recipientTaxId;
-    private String senderTaxId;
     private String senderServiceId;
     private String subject;
     private String markdown;

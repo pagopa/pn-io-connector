@@ -30,6 +30,7 @@ public class LocalStackTestConfig {
             new LocalStackContainer(dockerImageName)
                     .withServices(DYNAMODB, SQS, SECRETSMANAGER)
                     .withEnv("USE_SSL", "false")
+                    .withServices(DYNAMODB, SQS, SECRETSMANAGER)
                     .withClasspathResourceMapping("testcontainers/init.sh", "/docker-entrypoint-initaws.d/init.sh", BindMode.READ_ONLY)
                     .withClasspathResourceMapping("testcontainers/credentials", "/root/.aws/credentials", BindMode.READ_ONLY)
                     .waitingFor(Wait.forLogMessage(".*Initialization terminated.*", 1)
@@ -39,6 +40,7 @@ public class LocalStackTestConfig {
         localStack.start();
         System.setProperty("aws.endpoint-url", localStack.getEndpointOverride(DYNAMODB).toString());
         System.setProperty("test.aws.dynamodb.endpoint", localStack.getEndpointOverride(DYNAMODB).toString());
+        System.setProperty("aws.endpoint-url-sqs", localStack.getEndpointOverride(SQS).toString());
         try {
             System.setProperty("aws.sharedCredentialsFile",
                     new ClassPathResource("testcontainers/credentials").getFile().getAbsolutePath());
