@@ -1,16 +1,21 @@
 package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.commons.exceptions.PnRuntimeException;
 import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
@@ -33,10 +38,24 @@ public class MessageService {
     private final PnIoConnectorConfig config;
     private final IOConnectorRequestDao requestDao;
 
-    public MessageResponse handleSendRequest(String cxId, MessageRequest request) {
+    public Optional<MessageResponse> handleSendRequest(String cxId, MessageRequest request) {
         log.logStartingProcess(HANDLE_SEND_REQUEST);
         MDC.put("requestId", request.getRequestId());
         try {
+            Optional<IOConnectorRequestEntity> existing = requestDao.findById(request.getRequestId());
+            if (existing.isPresent()) {
+                if (isSamePayload(cxId, request, existing.get())) {
+                    log.info("Richiesta duplicata con payload identico — requestId={}", request.getRequestId());
+                    return Optional.empty();
+                } else {
+                    throw new PnRuntimeException(
+                        "Request ID already exists with different payload",
+                        PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_REQUEST_CONFLICT,
+                        HttpStatus.CONFLICT.value(),
+                        new ArrayList<>()
+                    );
+                }
+            }
 
             MessageSendRequest sqsMsg = MessageSendRequest.builder()
                 .requestId(request.getRequestId())
@@ -77,9 +96,9 @@ public class MessageService {
             sqsClient.sendMessage(r -> r.queueUrl(queueUrl).messageBody(messageBody));
 
             log.logEndingProcess(HANDLE_SEND_REQUEST);
-            return new MessageResponse()
+            return Optional.of(new MessageResponse()
                 .requestId(sqsMsg.getRequestId()).xPagopaIoConCxId(cxId)
-                .status(MessageResponse.StatusEnum.ACCEPTED);
+                .status(MessageResponse.StatusEnum.ACCEPTED));
 
         } catch (Exception e) {
             log.logEndingProcess(HANDLE_SEND_REQUEST, false, e.getMessage(), e);
@@ -89,11 +108,22 @@ public class MessageService {
         }
     }
 
+    private boolean isSamePayload(String cxId, MessageRequest request, IOConnectorRequestEntity entity) {
+        return Objects.equals(cxId, entity.getXPagopaIoConCxId())
+            && Objects.equals(request.getIun(), entity.getIun())
+            && Objects.equals(request.getSenderServiceId(), entity.getSenderServiceId())
+            && Objects.equals(request.getSubject(), entity.getSubject())
+            && Objects.equals(request.getMarkdown(), entity.getMarkdown());
+    }
+
     private IOConnectorRequestEntity buildAcceptedEntity(String cxId, MessageSendRequest sqsMsg, MessageRequest request) {
         return IOConnectorRequestEntity.builder()
                 .requestId(sqsMsg.getRequestId())
                 .xPagopaIoConCxId(cxId)
                 .iun(sqsMsg.getIun())
+                .senderServiceId(sqsMsg.getSenderServiceId())
+                .subject(sqsMsg.getSubject())
+                .markdown(sqsMsg.getMarkdown())
                 .status("ACCEPTED")
                 .pollingMaxDate(Instant.now().plus(
                         request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48,

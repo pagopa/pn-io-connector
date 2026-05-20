@@ -9,8 +9,11 @@ import it.pagopa.pn.ioconnector.service.io.MessageService;
 import it.pagopa.pn.ioconnector.service.io.ProfileService;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Optional;
 
 @CustomLog
 @RestController
@@ -22,10 +25,10 @@ public class IOController implements IoApi {
 
     @Override
     public ResponseEntity<MessageResponse> sendIOMessage(String xPagopaIoConCxId, MessageRequest messageRequest) {
-        MessageResponse response = messageService.handleSendRequest(xPagopaIoConCxId, messageRequest);
-        return MessageResponse.StatusEnum.ACCEPTED.equals(response.getStatus())
-            ? ResponseEntity.accepted().body(response)
-            : ResponseEntity.ok(response);
+        Optional<MessageResponse> result = messageService.handleSendRequest(xPagopaIoConCxId, messageRequest);
+        return result.isPresent()
+            ? ResponseEntity.ok(result.get())
+            : ResponseEntity.status(HttpStatus.NO_CONTENT).<MessageResponse>build();
     }
 
     @Override

@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -50,16 +51,42 @@ class IOControllerTest {
                 .xPagopaIoConCxId("pn-delivery-push")
                 .status(MessageResponse.StatusEnum.ACCEPTED);
 
-        when(messageService.handleSendRequest(eq("pn-delivery-push"), any(MessageRequest.class))).thenReturn(response);
+        when(messageService.handleSendRequest(eq("pn-delivery-push"), any(MessageRequest.class)))
+                .thenReturn(Optional.of(response));
 
         mockMvc.perform(post("/io/message")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildMessageRequest())))
-                .andExpect(status().isAccepted())
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestId").value("REQ-TEST-001"))
                 .andExpect(jsonPath("$.xPagopaIoConCxId").value("pn-delivery-push"))
                 .andExpect(jsonPath("$.status").value("ACCEPTED"));
+    }
+
+    @Test
+    void sendIOMessage_duplicate_returns204() throws Exception {
+        when(messageService.handleSendRequest(eq("pn-delivery-push"), any(MessageRequest.class)))
+                .thenReturn(Optional.empty());
+
+        mockMvc.perform(post("/io/message")
+                .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(buildMessageRequest())))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void sendIOMessage_conflict_returns409() throws Exception {
+        when(messageService.handleSendRequest(any(), any())).thenThrow(
+                new PnRuntimeException("conflict", "conflict", HttpStatus.CONFLICT.value(), new ArrayList<>())
+        );
+
+        mockMvc.perform(post("/io/message")
+                .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(buildMessageRequest())))
+                .andExpect(status().isConflict());
     }
 
     @Test
