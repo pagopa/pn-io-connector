@@ -1,7 +1,6 @@
 package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
 import io.awspring.cloud.sqs.annotation.SqsListener;
-import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
@@ -17,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.List;
 
 @Component
 @CustomLog
@@ -30,18 +30,9 @@ public class SendWorker {
 
     @SqsListener(value = "${pn.io-connector.sqs-send-queue-name}")
     public void process(MessageSendRequest request) {
-        String apiKey = ioService.getServiceUseKey(request.getSenderTaxId(), request.getSenderServiceId());
+        String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
 
-        LimitedProfile profile;
-        try {
-            profile = ioService.checkUserProfile(request.getRecipientTaxId(), apiKey);
-        } catch (PnHttpResponseException e) {
-            if (e.getStatusCode() == 404) {
-                handleSenderNotAllowed(request);
-                return;
-            }
-            throw e;
-        }
+        LimitedProfile profile = ioService.checkUserProfile(request.getRecipientTaxId(), apiKey);
 
         if (Boolean.FALSE.equals(profile.getSenderAllowed())) {
             handleSenderNotAllowed(request);
@@ -50,21 +41,26 @@ public class SendWorker {
 
         String ioMessageId = ioService.sendMessage(request, apiKey);
 
-        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+        dao.update(IOConnectorRequestEntity.builder()
                 .requestId(request.getRequestId())
                 .ioMessageId(ioMessageId)
                 .status(EventType.SENT_TO_IO.name())
-                .build();
-        dao.update(entity);
+                .eventList(List.of(IOConnectorRequestEntity.Event.builder()
+                        .eventDate(Instant.now().toString())
+                        .status(EventType.SENT_TO_IO.name())
+                        .build()))
+                .build());
 
-        OutcomeEvent outcomeEvent = OutcomeEvent.builder()
-                .requestId(request.getRequestId())
-                .xPagopaIoConCxId(request.getXPagopaIoConCxId())
-                .ioMessageId(ioMessageId)
-                .eventType(EventType.SENT_TO_IO)
-                .eventTimestamp(Instant.now())
-                .build();
-        eventBridgeProducer.publish(outcomeEvent);
+        if (EventType.SENT_TO_IO.isNotify()) {
+            OutcomeEvent outcomeEvent = OutcomeEvent.builder()
+                    .requestId(request.getRequestId())
+                    .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                    .ioMessageId(ioMessageId)
+                    .eventType(EventType.SENT_TO_IO)
+                    .eventTimestamp(Instant.now())
+                    .build();
+            eventBridgeProducer.publish(outcomeEvent);
+        }
 
         OutcomePollingRequest pollingRequest = OutcomePollingRequest.builder()
                 .requestId(request.getRequestId())
@@ -80,11 +76,14 @@ public class SendWorker {
     }
 
     private void handleSenderNotAllowed(MessageSendRequest request) {
-        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+        dao.update(IOConnectorRequestEntity.builder()
                 .requestId(request.getRequestId())
                 .status(EventType.SENDER_NOT_ALLOWED.name())
-                .build();
-        dao.update(entity);
+                .eventList(List.of(IOConnectorRequestEntity.Event.builder()
+                        .eventDate(Instant.now().toString())
+                        .status(EventType.SENDER_NOT_ALLOWED.name())
+                        .build()))
+                .build());
 
         OutcomeEvent outcomeEvent = OutcomeEvent.builder()
                 .requestId(request.getRequestId())

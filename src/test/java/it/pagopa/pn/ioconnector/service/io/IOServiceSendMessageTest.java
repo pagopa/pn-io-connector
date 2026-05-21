@@ -58,7 +58,6 @@ class IOServiceSendMessageTest {
                 .xPagopaIoConCxId("pn-delivery-push")
                 .iun("IUN-001")
                 .recipientTaxId("RSSMRA80A01H501U")
-                .senderTaxId("12345678901")
                 .senderServiceId("SVC-001")
                 .subject("Test subject")
                 .markdown("Test body")

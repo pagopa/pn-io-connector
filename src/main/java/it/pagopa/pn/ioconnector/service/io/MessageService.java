@@ -1,13 +1,14 @@
 package it.pagopa.pn.ioconnector.service.io;
 
-import it.pagopa.pn.commons.exceptions.PnInternalException;
-import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
+import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
@@ -19,6 +20,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
+import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.HANDLE_SEND_REQUEST;
@@ -94,14 +96,14 @@ public class MessageService {
                 .requestId(sqsMsg.getRequestId())
                 .xPagopaIoConCxId(cxId)
                 .iun(sqsMsg.getIun())
-                .status("ACCEPTED")
+                .status(EventType.ACCEPTED.name())
                 .pollingMaxDate(Instant.now().plus(
                         request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48,
                         ChronoUnit.HOURS).toString())
                 .eventList(List.of(
                         IOConnectorRequestEntity.Event.builder()
                                 .eventDate(Instant.now().toString())
-                                .status("ACCEPTED")
+                                .status(EventType.ACCEPTED.name())
                                 .build()
                 ))
                 .createdAt(Instant.now().toString())

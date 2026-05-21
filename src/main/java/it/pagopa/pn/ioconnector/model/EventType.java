@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum EventType {
 
+    ACCEPTED(false),
     SENDER_NOT_ALLOWED(true),
     SENT_TO_IO(true),
     DELIVERED_TO_USER(true),

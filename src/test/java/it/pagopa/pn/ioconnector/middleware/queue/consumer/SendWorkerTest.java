@@ -1,6 +1,5 @@
 package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
-import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
@@ -17,10 +16,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Instant;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -43,7 +40,7 @@ class SendWorkerTest {
     @Test
     void senderNotAllowed_whenProfileReturnsFalse() {
         MessageSendRequest request = buildRequest();
-        when(ioService.getServiceUseKey(request.getSenderTaxId(), request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(false);
         when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
@@ -53,31 +50,12 @@ class SendWorkerTest {
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.SENDER_NOT_ALLOWED.name());
+        assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
+        assertThat(entityCaptor.getValue().getEventList().get(0).getStatus()).isEqualTo(EventType.SENDER_NOT_ALLOWED.name());
 
-        ArgumentCaptor<OutcomeEvent> eventCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
-        verify(eventBridgeProducer).publish(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.SENDER_NOT_ALLOWED);
-
-        verify(ioService, never()).sendMessage(any(), any());
-        verify(pollingQueueProducer, never()).publish(any());
-    }
-
-    @Test
-    void senderNotAllowed_when404OnProfile() {
-        MessageSendRequest request = buildRequest();
-        when(ioService.getServiceUseKey(request.getSenderTaxId(), request.getSenderServiceId())).thenReturn("api-key");
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key"))
-                .thenThrow(new PnHttpResponseException("Not Found", 404));
-
-        sendWorker.process(request);
-
-        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
-        verify(dao).update(entityCaptor.capture());
-        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.SENDER_NOT_ALLOWED.name());
-
-        ArgumentCaptor<OutcomeEvent> eventCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
-        verify(eventBridgeProducer).publish(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.SENDER_NOT_ALLOWED);
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.SENDER_NOT_ALLOWED);
 
         verify(ioService, never()).sendMessage(any(), any());
         verify(pollingQueueProducer, never()).publish(any());
@@ -86,7 +64,7 @@ class SendWorkerTest {
     @Test
     void sendSuccess_updatesDbAndPublishesEvents() {
         MessageSendRequest request = buildRequest();
-        when(ioService.getServiceUseKey(request.getSenderTaxId(), request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
         when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
@@ -98,10 +76,12 @@ class SendWorkerTest {
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.SENT_TO_IO.name());
         assertThat(entityCaptor.getValue().getIoMessageId()).isEqualTo("IO-MSG-001");
+        assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
+        assertThat(entityCaptor.getValue().getEventList().get(0).getStatus()).isEqualTo(EventType.SENT_TO_IO.name());
 
-        ArgumentCaptor<OutcomeEvent> eventCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
-        verify(eventBridgeProducer).publish(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.SENT_TO_IO);
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.SENT_TO_IO);
 
         verify(pollingQueueProducer).publish(any(OutcomePollingRequest.class));
     }
@@ -109,7 +89,7 @@ class SendWorkerTest {
     @Test
     void propagatesException_onSendMessageError() {
         MessageSendRequest request = buildRequest();
-        when(ioService.getServiceUseKey(request.getSenderTaxId(), request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
         when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
@@ -133,7 +113,7 @@ class SendWorkerTest {
                 .creditorTaxId("77777777777")
                 .build());
 
-        when(ioService.getServiceUseKey(request.getSenderTaxId(), request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
         when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
@@ -152,7 +132,6 @@ class SendWorkerTest {
                 .xPagopaIoConCxId("pn-delivery-push")
                 .iun("IUN-001")
                 .recipientTaxId("RSSMRA80A01H501U")
-                .senderTaxId("12345678901")
                 .senderServiceId("SVC-001")
                 .subject("Test subject")
                 .markdown("Test body")
