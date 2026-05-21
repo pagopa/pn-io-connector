@@ -17,6 +17,7 @@ import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueReques
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -33,6 +34,7 @@ public class PnIoConnectorConfig {
     private String sqsPollingQueueName;
     private String eventBridgeBusName;
     private String secretsName;
+    private List<Integer> sendRetryPolicy;
 
     @Bean
     public Map<String, String> apiKeyUseSecrets(SecretsManagerClient secretsManagerClient, ObjectMapper objectMapper) {

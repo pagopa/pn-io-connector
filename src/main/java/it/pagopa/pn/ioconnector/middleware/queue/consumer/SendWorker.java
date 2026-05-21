@@ -1,6 +1,8 @@
 package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
 import io.awspring.cloud.sqs.annotation.SqsListener;
+import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
+import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
@@ -13,7 +15,11 @@ import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProf
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.Message;
 import org.springframework.stereotype.Component;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
 
 import java.time.Instant;
 import java.util.List;
@@ -27,9 +33,14 @@ public class SendWorker {
     private final IOConnectorRequestDao dao;
     private final EventBridgeProducer eventBridgeProducer;
     private final PollingQueueProducer pollingQueueProducer;
+    private final SqsClient sqsClient;
+    private final PnIoConnectorConfig config;
 
     @SqsListener(value = "${pn.io-connector.sqs-send-queue-name}")
-    public void process(MessageSendRequest request) {
+    public void process(Message<MessageSendRequest> message) {
+        MessageSendRequest request = message.getPayload();
+        String receiptHandle = (String) message.getHeaders().get("Sqs_ReceiptHandle");
+
         String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
 
         LimitedProfile profile = ioService.checkUserProfile(request.getRecipientTaxId(), apiKey);
@@ -39,7 +50,36 @@ public class SendWorker {
             return;
         }
 
-        String ioMessageId = ioService.sendMessage(request, apiKey);
+        String ioMessageId;
+        try {
+            ioMessageId = ioService.sendMessage(request, apiKey);
+        } catch (PnHttpResponseException ex) {
+            IOConnectorRequestEntity entity = dao.findById(request.getRequestId()).orElse(null);
+            int currentStep = (entity != null && entity.getRetryStep() != null) ? entity.getRetryStep() : 0;
+
+            List<Integer> policy = config.getSendRetryPolicy();
+            if (currentStep >= policy.size()) {
+                handleRetryExhausted(request);
+                return;
+            }
+
+            int delaySeconds = policy.get(currentStep) * 60;
+            String queueUrl = sqsClient.getQueueUrl(GetQueueUrlRequest.builder()
+                    .queueName(config.getSqsSendQueueName())
+                    .build()).queueUrl();
+            sqsClient.changeMessageVisibility(ChangeMessageVisibilityRequest.builder()
+                    .queueUrl(queueUrl)
+                    .receiptHandle(receiptHandle)
+                    .visibilityTimeout(delaySeconds)
+                    .build());
+
+            dao.update(IOConnectorRequestEntity.builder()
+                    .requestId(request.getRequestId())
+                    .retryStep(currentStep + 1)
+                    .lastRetryTimestamp(Instant.now().toString())
+                    .build());
+            return;
+        }
 
         dao.update(IOConnectorRequestEntity.builder()
                 .requestId(request.getRequestId())
@@ -73,6 +113,26 @@ public class SendWorker {
                 .pollingMaxDate(request.getPollingMaxDate())
                 .build();
         pollingQueueProducer.publish(pollingRequest);
+    }
+
+    private void handleRetryExhausted(MessageSendRequest request) {
+        log.error("Long retry exhausted for requestId={}", request.getRequestId());
+        dao.update(IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .status(EventType.IO_SEND_RETRY_EXHAUSTED.name())
+                .eventList(List.of(IOConnectorRequestEntity.Event.builder()
+                        .eventDate(Instant.now().toString())
+                        .status(EventType.IO_SEND_RETRY_EXHAUSTED.name())
+                        .build()))
+                .build());
+        if (EventType.IO_SEND_RETRY_EXHAUSTED.isNotify()) {
+            eventBridgeProducer.publish(OutcomeEvent.builder()
+                    .requestId(request.getRequestId())
+                    .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                    .eventType(EventType.IO_SEND_RETRY_EXHAUSTED)
+                    .eventTimestamp(Instant.now())
+                    .build());
+        }
     }
 
     private void handleSenderNotAllowed(MessageSendRequest request) {

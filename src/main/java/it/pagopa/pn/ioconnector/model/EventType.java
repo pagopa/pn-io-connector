@@ -13,7 +13,8 @@ public enum EventType {
     DELIVERED_TO_USER(true),
     READ(true),
     PAID(true),
-    POLLING_EXHAUSTED(false);
+    POLLING_EXHAUSTED(false),
+    IO_SEND_RETRY_EXHAUSTED(true);
 
     private final boolean notify;
 }

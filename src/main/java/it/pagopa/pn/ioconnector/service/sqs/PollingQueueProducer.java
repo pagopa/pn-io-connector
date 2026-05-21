@@ -8,6 +8,7 @@ import it.pagopa.pn.ioconnector.model.OutcomePollingRequest;
 
 import static it.pagopa.pn.commons.exceptions.PnExceptionsCodes.ERROR_CODE_PN_GENERIC_ERROR;
 import lombok.CustomLog;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
@@ -15,17 +16,12 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 @Component
 @CustomLog
+@RequiredArgsConstructor
 public class PollingQueueProducer {
 
     private final SqsClient sqsClient;
     private final PnIoConnectorConfig config;
     private final ObjectMapper objectMapper;
-
-    public PollingQueueProducer(SqsClient sqsClient, PnIoConnectorConfig config, ObjectMapper objectMapper) {
-        this.sqsClient = sqsClient;
-        this.config = config;
-        this.objectMapper = objectMapper;
-    }
 
     public void publish(OutcomePollingRequest request) {
         String messageBody;

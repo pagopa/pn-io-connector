@@ -1,5 +1,7 @@
 package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
+import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
+import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
@@ -16,8 +18,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueUrlResponse;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,18 +44,21 @@ class SendWorkerTest {
     @Mock private IOConnectorRequestDao dao;
     @Mock private EventBridgeProducer eventBridgeProducer;
     @Mock private PollingQueueProducer pollingQueueProducer;
+    @Mock private SqsClient sqsClient;
+    @Mock private PnIoConnectorConfig config;
 
     @InjectMocks private SendWorker sendWorker;
 
     @Test
     void senderNotAllowed_whenProfileReturnsFalse() {
         MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(false);
         when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
 
-        sendWorker.process(request);
+        sendWorker.process(message);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
@@ -64,13 +77,14 @@ class SendWorkerTest {
     @Test
     void sendSuccess_updatesDbAndPublishesEvents() {
         MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
         when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key"))).thenReturn("IO-MSG-001");
 
-        sendWorker.process(request);
+        sendWorker.process(message);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
@@ -89,6 +103,7 @@ class SendWorkerTest {
     @Test
     void propagatesException_onSendMessageError() {
         MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
@@ -96,7 +111,7 @@ class SendWorkerTest {
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new RuntimeException("IO 500"));
 
-        assertThatThrownBy(() -> sendWorker.process(request))
+        assertThatThrownBy(() -> sendWorker.process(message))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("IO 500");
 
@@ -112,6 +127,7 @@ class SendWorkerTest {
                 .noticeCode("302000000000000000")
                 .creditorTaxId("77777777777")
                 .build());
+        Message<MessageSendRequest> message = buildMessage(request);
 
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
@@ -119,11 +135,118 @@ class SendWorkerTest {
         when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key"))).thenReturn("IO-MSG-002");
 
-        sendWorker.process(request);
+        sendWorker.process(message);
 
         ArgumentCaptor<OutcomePollingRequest> pollingCaptor = ArgumentCaptor.forClass(OutcomePollingRequest.class);
         verify(pollingQueueProducer).publish(pollingCaptor.capture());
         assertThat(pollingCaptor.getValue().isPaymentData()).isTrue();
+    }
+
+    @Test
+    void sendMessage_retryableError_firstAttempt_changesVisibilityWithDelay() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        LimitedProfile profile = new LimitedProfile();
+        profile.setSenderAllowed(true);
+        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new PnHttpResponseException("Too Many Requests", 429));
+
+        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .retryStep(null)
+                .build();
+        when(dao.findById(request.getRequestId())).thenReturn(Optional.of(entity));
+        when(config.getSendRetryPolicy()).thenReturn(List.of(5, 10, 20, 40));
+        when(config.getSqsSendQueueName()).thenReturn("pn-io-connector-send-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder()
+                        .queueUrl("https://sqs.us-east-1.amazonaws.com/123456789/pn-io-connector-send-queue")
+                        .build());
+
+        sendWorker.process(message);
+
+        ArgumentCaptor<ChangeMessageVisibilityRequest> visibilityCaptor =
+                ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
+        verify(sqsClient).changeMessageVisibility(visibilityCaptor.capture());
+        assertThat(visibilityCaptor.getValue().visibilityTimeout()).isEqualTo(300);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(1);
+        assertThat(entityCaptor.getValue().getLastRetryTimestamp()).isNotNull();
+
+        verify(eventBridgeProducer, never()).publish(any());
+    }
+
+    @Test
+    void sendMessage_retryableError_lastAttempt_callsHandleRetryExhausted() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        LimitedProfile profile = new LimitedProfile();
+        profile.setSenderAllowed(true);
+        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new PnHttpResponseException("Service Unavailable", 503));
+
+        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .retryStep(4)
+                .build();
+        when(dao.findById(request.getRequestId())).thenReturn(Optional.of(entity));
+        when(config.getSendRetryPolicy()).thenReturn(List.of(5, 10, 20, 40));
+
+        sendWorker.process(message);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.IO_SEND_RETRY_EXHAUSTED.name());
+
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.IO_SEND_RETRY_EXHAUSTED);
+
+        verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
+    }
+
+    @Test
+    void sendMessage_retryableError_secondAttempt_changesVisibilityWithIncreasedDelay() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        LimitedProfile profile = new LimitedProfile();
+        profile.setSenderAllowed(true);
+        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new PnHttpResponseException("Bad Gateway", 502));
+
+        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .retryStep(1)
+                .build();
+        when(dao.findById(request.getRequestId())).thenReturn(Optional.of(entity));
+        when(config.getSendRetryPolicy()).thenReturn(List.of(5, 10, 20, 40));
+        when(config.getSqsSendQueueName()).thenReturn("pn-io-connector-send-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder()
+                        .queueUrl("https://sqs.us-east-1.amazonaws.com/123456789/pn-io-connector-send-queue")
+                        .build());
+
+        sendWorker.process(message);
+
+        ArgumentCaptor<ChangeMessageVisibilityRequest> visibilityCaptor =
+                ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
+        verify(sqsClient).changeMessageVisibility(visibilityCaptor.capture());
+        assertThat(visibilityCaptor.getValue().visibilityTimeout()).isEqualTo(600);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(2);
     }
 
     private MessageSendRequest buildRequest() {
@@ -136,6 +259,12 @@ class SendWorkerTest {
                 .subject("Test subject")
                 .markdown("Test body")
                 .pollingMaxDate(Instant.now().plusSeconds(3600))
+                .build();
+    }
+
+    private Message<MessageSendRequest> buildMessage(MessageSendRequest request) {
+        return MessageBuilder.withPayload(request)
+                .setHeader("Sqs_ReceiptHandle", "test-receipt-handle")
                 .build();
     }
 }
