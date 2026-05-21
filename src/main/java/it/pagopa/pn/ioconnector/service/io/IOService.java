@@ -78,6 +78,6 @@ public class IOService {
     }
 
     public String getServiceUseKey(String serviceId) {
-        return ioClient.getServiceUseKey(serviceId, null);
+        return ioClient.getServiceUseKey(serviceId);
     }
 }

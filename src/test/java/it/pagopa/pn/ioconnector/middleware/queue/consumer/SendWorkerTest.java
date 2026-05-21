@@ -206,10 +206,7 @@ class SendWorkerTest {
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.IO_SEND_RETRY_EXHAUSTED.name());
 
-        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
-        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
-        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.IO_SEND_RETRY_EXHAUSTED);
-
+        verify(eventBridgeProducer, never()).publish(any());
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
     }
 
@@ -247,6 +244,48 @@ class SendWorkerTest {
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(2);
+    }
+
+    @Test
+    void sendMessage_nonRetryableError_404_propagatesExceptionWithoutVisibilityChange() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        LimitedProfile profile = new LimitedProfile();
+        profile.setSenderAllowed(true);
+        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new PnHttpResponseException("Not Found", 404));
+
+        assertThatThrownBy(() -> sendWorker.process(message))
+                .isInstanceOf(PnHttpResponseException.class)
+                .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(404));
+
+        verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
+        verify(dao, never()).update(any());
+        verify(eventBridgeProducer, never()).publish(any());
+    }
+
+    @Test
+    void sendMessage_nonRetryableError_400_propagatesExceptionWithoutVisibilityChange() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        LimitedProfile profile = new LimitedProfile();
+        profile.setSenderAllowed(true);
+        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new PnHttpResponseException("Bad Request", 400));
+
+        assertThatThrownBy(() -> sendWorker.process(message))
+                .isInstanceOf(PnHttpResponseException.class)
+                .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(400));
+
+        verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
+        verify(dao, never()).update(any());
+        verify(eventBridgeProducer, never()).publish(any());
     }
 
     private MessageSendRequest buildRequest() {

@@ -54,6 +54,9 @@ public class SendWorker {
         try {
             ioMessageId = ioService.sendMessage(request, apiKey);
         } catch (PnHttpResponseException ex) {
+            if (!isRetryable(ex.getStatusCode())) {
+                throw ex;
+            }
             IOConnectorRequestEntity entity = dao.findById(request.getRequestId()).orElse(null);
             int currentStep = (entity != null && entity.getRetryStep() != null) ? entity.getRetryStep() : 0;
 
@@ -113,6 +116,10 @@ public class SendWorker {
                 .pollingMaxDate(request.getPollingMaxDate())
                 .build();
         pollingQueueProducer.publish(pollingRequest);
+    }
+
+    private boolean isRetryable(int statusCode) {
+        return statusCode == 429 || statusCode >= 500;
     }
 
     private void handleRetryExhausted(MessageSendRequest request) {

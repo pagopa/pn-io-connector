@@ -40,6 +40,7 @@ public class MessageService {
         MDC.put("requestId", request.getRequestId());
         try {
 
+            long pollingMaxHours = request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48;
             MessageSendRequest sqsMsg = MessageSendRequest.builder()
                 .requestId(request.getRequestId())
                 .xPagopaIoConCxId(cxId)
@@ -58,6 +59,7 @@ public class MessageService {
                         noticeCode(request.getPaymentData().getNoticeCode()).
                         invalidAfterDueDate(request.getPaymentData().getInvalidAfterDueDate()).
                         build() : null)
+                .pollingMaxDate(Instant.now().plus(pollingMaxHours, ChronoUnit.HOURS))
                 .createdAt(Instant.now())
                 .build();
 
