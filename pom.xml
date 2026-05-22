@@ -7,10 +7,10 @@
 		<version>1.0.0</version>
 		<relativePath />
 	</parent>
-	<artifactId>pn-template-ms-be</artifactId>
+	<artifactId>pn-io-connector</artifactId>
 	<version>1.0.0-SNAPSHOT</version>
-	<name>pn-template-ms-be</name>
-	<description>A template for a PN Backend Microservice</description>
+	<name>pn-io-connector</name>
+	<description>Connector between SEND and app IO backend</description>
 	<scm>
 		<connection>${git.conn}</connection>
 		<developerConnection>${git.devConn}</developerConnection>
