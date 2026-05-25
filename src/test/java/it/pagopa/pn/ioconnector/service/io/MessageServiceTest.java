@@ -23,6 +23,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -37,16 +38,15 @@ class MessageServiceTest {
     @InjectMocks private MessageService messageService;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         when(requestDao.findById(any())).thenReturn(Optional.empty());
+        lenient().when(sqsClient.getQueueUrl(any(java.util.function.Consumer.class)))
+                .thenReturn(GetQueueUrlResponse.builder().queueUrl("http://localhost:4566/queue/pn-io-connector-send-queue").build());
+        lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
     }
 
     @Test
     void handleSendRequest_accepted() throws Exception {
-        when(sqsClient.getQueueUrl(any(java.util.function.Consumer.class)))
-                .thenReturn(GetQueueUrlResponse.builder().queueUrl("http://localhost:4566/queue/pn-io-connector-send-queue").build());
-        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-
         Optional<MessageResponse> result = messageService.handleSendRequest("pn-delivery-push", buildRequest());
 
         assertThat(result).isPresent();

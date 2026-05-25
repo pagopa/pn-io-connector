@@ -12,8 +12,6 @@ import java.util.Optional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import it.pagopa.pn.commons.exceptions.PnInternalException;
-import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
@@ -42,7 +40,7 @@ public class MessageService {
     private final PnIoConnectorConfig config;
     private final IOConnectorRequestDao requestDao;
 
-    public MessageResponse handleSendRequest(String cxId, MessageRequest request) {
+    public Optional<MessageResponse> handleSendRequest(String cxId, MessageRequest request) {
         log.logStartingProcess(HANDLE_SEND_REQUEST);
         MDC.put("requestId", request.getRequestId());
         try {
