@@ -22,6 +22,7 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.PaymentData;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
@@ -73,6 +74,7 @@ public class MessageService {
                     MessageSendRequest.PaymentData.builder().
                         amount(request.getPaymentData().getAmount()).
                         noticeCode(request.getPaymentData().getNoticeCode()).
+                        creditorTaxId(request.getPaymentData().getCreditorTaxId()).
                         invalidAfterDueDate(request.getPaymentData().getInvalidAfterDueDate()).
                         build() : null)
                 .createdAt(Instant.now())
@@ -83,8 +85,6 @@ public class MessageService {
                     sqsMsg.getIun(),
                     sqsMsg.getSenderServiceId());
 
-            requestDao.save(buildAcceptedEntity(cxId, sqsMsg, request));
-
             String messageBody;
             try {
                 messageBody = objectMapper.writeValueAsString(sqsMsg);
@@ -94,6 +94,8 @@ public class MessageService {
             }
             String queueUrl = sqsClient.getQueueUrl(r -> r.queueName(config.getSqsSendQueueName())).queueUrl();
             sqsClient.sendMessage(r -> r.queueUrl(queueUrl).messageBody(messageBody));
+
+            requestDao.save(buildAcceptedEntity(cxId, sqsMsg, request));
 
             log.logEndingProcess(HANDLE_SEND_REQUEST);
             return Optional.of(new MessageResponse()
@@ -113,7 +115,17 @@ public class MessageService {
             && Objects.equals(request.getIun(), entity.getIun())
             && Objects.equals(request.getSenderServiceId(), entity.getSenderServiceId())
             && Objects.equals(request.getSubject(), entity.getSubject())
-            && Objects.equals(request.getMarkdown(), entity.getMarkdown());
+            && Objects.equals(request.getMarkdown(), entity.getMarkdown())
+            && Objects.equals(request.getSensitiveContent(), entity.getSensitiveContent())
+            && isSamePaymentData(request.getPaymentData(), entity.getPaymentData());
+    }
+
+    private boolean isSamePaymentData(PaymentData requestPd, IOConnectorRequestEntity.PaymentData entityPd) {
+        if (requestPd == null && entityPd == null) return true;
+        if (requestPd == null || entityPd == null) return false;
+        return Objects.equals(requestPd.getAmount(), entityPd.getAmount())
+            && Objects.equals(requestPd.getNoticeCode(), entityPd.getNoticeCode())
+            && Objects.equals(requestPd.getCreditorTaxId(), entityPd.getCreditorTaxId());
     }
 
     private IOConnectorRequestEntity buildAcceptedEntity(String cxId, MessageSendRequest sqsMsg, MessageRequest request) {
@@ -124,6 +136,14 @@ public class MessageService {
                 .senderServiceId(sqsMsg.getSenderServiceId())
                 .subject(sqsMsg.getSubject())
                 .markdown(sqsMsg.getMarkdown())
+                .sensitiveContent(sqsMsg.getSensitiveContent())
+                .paymentData(sqsMsg.getPaymentData() != null
+                    ? IOConnectorRequestEntity.PaymentData.builder()
+                        .amount(sqsMsg.getPaymentData().getAmount())
+                        .noticeCode(sqsMsg.getPaymentData().getNoticeCode())
+                        .creditorTaxId(sqsMsg.getPaymentData().getCreditorTaxId())
+                        .build()
+                    : null)
                 .status("ACCEPTED")
                 .pollingMaxDate(Instant.now().plus(
                         request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48,
