@@ -7,12 +7,14 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum EventType {
 
+    ACCEPTED(false),
     SENDER_NOT_ALLOWED(true),
     SENT_TO_IO(true),
     DELIVERED_TO_USER(true),
     READ(true),
     PAID(true),
-    POLLING_EXHAUSTED(false);
+    POLLING_EXHAUSTED(false),
+    IO_SEND_RETRY_EXHAUSTED(false);
 
     private final boolean notify;
 }

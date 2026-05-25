@@ -1,7 +1,6 @@
 package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
-import it.pagopa.pn.ioconnector.exceptions.PnIOGetProfileException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOClient;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.FiscalCodePayload;
@@ -9,6 +8,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.MessageCont
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.Payee;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.PaymentData;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ThirdPartyData;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import lombok.CustomLog;
@@ -25,43 +25,49 @@ public class IOService {
     public LimitedProfile checkUserProfile(String taxId, String apiKey) {
         FiscalCodePayload fiscalCodePayload = new FiscalCodePayload();
         fiscalCodePayload.setFiscalCode(taxId);
-        LimitedProfile limitedProfile = new LimitedProfile();
         try {
-            limitedProfile = ioClient.checkUserProfile(fiscalCodePayload, apiKey);
+            return ioClient.checkUserProfile(fiscalCodePayload, apiKey);
         } catch (PnHttpResponseException e) {
             if (e.getStatusCode() == 404) {
                 LimitedProfile notFound = new LimitedProfile();
                 notFound.setSenderAllowed(false);
                 return notFound;
             }
-            throw new PnIOGetProfileException(e.getStatusCode(), e.getMessage());
+            throw e;
         }
-        return limitedProfile;
     }
 
     public String sendMessage(MessageSendRequest request, String apiKey) {
-        var newMessage = new NewMessage()
-                .fiscalCode(request.getRecipientTaxId())
-                .featureLevelType("ADVANCED")
-                .content(buildMessageContent(request));
+        MessageContent content = new MessageContent();
+        content.setSubject(request.getSubject());
+        content.setMarkdown(request.getMarkdown());
+        content.setDueDate(request.getDueDate());
+
+        if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
+            ThirdPartyData thirdPartyData = new ThirdPartyData();
+            thirdPartyData.setId(request.getRequestId());
+            thirdPartyData.setHasAttachments(true);
+            content.setThirdPartyData(thirdPartyData);
+        }
+
+        if (request.getPaymentData() != null) {
+            MessageSendRequest.PaymentData pd = request.getPaymentData();
+            Payee payee = new Payee();
+            payee.setFiscalCode(pd.getCreditorTaxId());
+            PaymentData paymentData = new PaymentData();
+            paymentData.setAmount(pd.getAmount());
+            paymentData.setNoticeNumber(pd.getNoticeCode());
+            paymentData.setInvalidAfterDueDate(pd.getInvalidAfterDueDate());
+            paymentData.setPayee(payee);
+            content.setPaymentData(paymentData);
+        }
+
+        NewMessage newMessage = new NewMessage();
+        newMessage.setFiscalCode(request.getRecipientTaxId());
+        newMessage.setContent(content);
+        newMessage.setFeatureLevelType("ADVANCED");
+
         return ioClient.sendMessage(newMessage, apiKey);
-    }
-
-    private MessageContent buildMessageContent(MessageSendRequest request) {
-        return new MessageContent()
-                .subject(request.getSubject())
-                .markdown(request.getMarkdown())
-                .dueDate(request.getDueDate() != null ? request.getDueDate() : "2026-06-30T23:59:59Z")
-                .paymentData(buildPaymentData(request.getPaymentData()));
-    }
-
-    private PaymentData buildPaymentData(MessageSendRequest.PaymentData pd) {
-        if (pd == null) return null;
-        return new PaymentData()
-                .amount(pd.getAmount())
-                .noticeNumber(pd.getNoticeCode())
-                .invalidAfterDueDate(pd.getInvalidAfterDueDate())
-                .payee(new Payee().fiscalCode(pd.getCreditorTaxId()));
     }
 
     public OutcomeEvent getMessageStatus(String taxId, String ioMessageId, String apiKey) {
@@ -71,6 +77,6 @@ public class IOService {
     }
 
     public String getServiceUseKey(String serviceId) {
-        return ioClient.getServiceUseKey(serviceId, null);
+        return ioClient.getServiceUseKey(serviceId);
     }
 }

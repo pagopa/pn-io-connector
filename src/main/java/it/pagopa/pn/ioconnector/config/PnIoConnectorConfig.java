@@ -17,20 +17,24 @@ import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueReques
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Data
 @Validated
 @Configuration
-@ConfigurationProperties(prefix = "pn.io-connector")
 @Import(SharedAutoConfiguration.class)
+@ConfigurationProperties(prefix = "pn.io-connector")
 public class PnIoConnectorConfig {
     private String ioBaseUrl;
     private String dataVaultBaseUrl;
     private String dynamodbTableName;
     @NotBlank
     private String sqsSendQueueName;
+    private String sqsPollingQueueName;
+    private String eventBridgeBusName;
     private String secretsName;
+    private List<Integer> sendRetryPolicy;
 
     @Bean
     public Map<String, String> apiKeyUseSecrets(SecretsManagerClient secretsManagerClient, ObjectMapper objectMapper) {

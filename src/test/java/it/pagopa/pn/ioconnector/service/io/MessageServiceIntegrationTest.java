@@ -46,7 +46,6 @@ class MessageServiceIntegrationTest {
                 .requestId("INT-REQ-001")
                 .iun("IUN-INT-001")
                 .recipientTaxId("ANON-TAX-INT")
-                .senderTaxId("SENDER-TAX-INT")
                 .senderServiceId("SVC-INT-001")
                 .subject("Integration Test Subject")
                 .markdown("Integration test body")
