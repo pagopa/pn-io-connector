@@ -30,7 +30,6 @@ public class LocalStackTestConfig {
             new LocalStackContainer(dockerImageName)
                     .withServices(DYNAMODB, SQS, SECRETSMANAGER)
                     .withEnv("USE_SSL", "false")
-                    .withServices(DYNAMODB, SQS, SECRETSMANAGER)
                     .withClasspathResourceMapping("testcontainers/init.sh", "/docker-entrypoint-initaws.d/init.sh", BindMode.READ_ONLY)
                     .withClasspathResourceMapping("testcontainers/credentials", "/root/.aws/credentials", BindMode.READ_ONLY)
                     .waitingFor(Wait.forLogMessage(".*Initialization terminated.*", 1)

@@ -1,6 +1,5 @@
 package it.pagopa.pn.ioconnector.service.io;
 
-import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
