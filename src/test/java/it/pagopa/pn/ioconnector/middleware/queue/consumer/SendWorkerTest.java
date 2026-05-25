@@ -5,11 +5,9 @@ import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
-import it.pagopa.pn.ioconnector.service.sqs.PollingQueueProducer;
 import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
-import it.pagopa.pn.ioconnector.model.OutcomePollingRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import org.junit.jupiter.api.Test;
@@ -43,7 +41,6 @@ class SendWorkerTest {
     @Mock private IOService ioService;
     @Mock private IOConnectorRequestDao dao;
     @Mock private EventBridgeProducer eventBridgeProducer;
-    @Mock private PollingQueueProducer pollingQueueProducer;
     @Mock private SqsClient sqsClient;
     @Mock private PnIoConnectorConfig config;
 
@@ -71,7 +68,6 @@ class SendWorkerTest {
         assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.SENDER_NOT_ALLOWED);
 
         verify(ioService, never()).sendMessage(any(), any());
-        verify(pollingQueueProducer, never()).publish(any());
     }
 
     @Test
@@ -96,8 +92,6 @@ class SendWorkerTest {
         ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
         verify(eventBridgeProducer).publish(outcomeCaptor.capture());
         assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.SENT_TO_IO);
-
-        verify(pollingQueueProducer).publish(any(OutcomePollingRequest.class));
     }
 
     @Test
@@ -136,10 +130,6 @@ class SendWorkerTest {
         when(ioService.sendMessage(eq(request), eq("api-key"))).thenReturn("IO-MSG-002");
 
         sendWorker.process(message);
-
-        ArgumentCaptor<OutcomePollingRequest> pollingCaptor = ArgumentCaptor.forClass(OutcomePollingRequest.class);
-        verify(pollingQueueProducer).publish(pollingCaptor.capture());
-        assertThat(pollingCaptor.getValue().isPaymentData()).isTrue();
     }
 
     @Test
@@ -285,6 +275,41 @@ class SendWorkerTest {
 
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
         verify(dao, never()).update(any());
+        verify(eventBridgeProducer, never()).publish(any());
+    }
+
+    @Test
+    void sendMessage_checkUserProfile_retryableError_appliesVisibilityTimeout() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key"))
+                .thenThrow(new PnHttpResponseException("Too Many Requests", 429));
+
+        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .retryStep(null)
+                .build();
+        when(dao.findById(request.getRequestId())).thenReturn(Optional.of(entity));
+        when(config.getSendRetryPolicy()).thenReturn(List.of(5, 10, 20, 40));
+        when(config.getSqsSendQueueName()).thenReturn("pn-io-connector-send-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder()
+                        .queueUrl("https://sqs.us-east-1.amazonaws.com/123456789/pn-io-connector-send-queue")
+                        .build());
+
+        sendWorker.process(message);
+
+        ArgumentCaptor<ChangeMessageVisibilityRequest> visibilityCaptor =
+                ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
+        verify(sqsClient).changeMessageVisibility(visibilityCaptor.capture());
+        assertThat(visibilityCaptor.getValue().visibilityTimeout()).isEqualTo(300);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(1);
+
         verify(eventBridgeProducer, never()).publish(any());
     }
 

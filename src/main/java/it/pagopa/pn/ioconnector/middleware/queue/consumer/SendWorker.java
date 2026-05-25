@@ -6,11 +6,9 @@ import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
-import it.pagopa.pn.ioconnector.service.sqs.PollingQueueProducer;
 import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
-import it.pagopa.pn.ioconnector.model.OutcomePollingRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import lombok.CustomLog;
@@ -32,7 +30,6 @@ public class SendWorker {
     private final IOService ioService;
     private final IOConnectorRequestDao dao;
     private final EventBridgeProducer eventBridgeProducer;
-    private final PollingQueueProducer pollingQueueProducer;
     private final SqsClient sqsClient;
     private final PnIoConnectorConfig config;
 
@@ -43,15 +40,15 @@ public class SendWorker {
 
         String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
 
-        LimitedProfile profile = ioService.checkUserProfile(request.getRecipientTaxId(), apiKey);
-
-        if (Boolean.FALSE.equals(profile.getSenderAllowed())) {
-            handleSenderNotAllowed(request);
-            return;
-        }
-
         String ioMessageId;
         try {
+            LimitedProfile profile = ioService.checkUserProfile(request.getRecipientTaxId(), apiKey);
+
+            if (Boolean.FALSE.equals(profile.getSenderAllowed())) {
+                handleSenderNotAllowed(request);
+                return;
+            }
+
             ioMessageId = ioService.sendMessage(request, apiKey);
         } catch (PnHttpResponseException ex) {
             if (!isRetryable(ex.getStatusCode())) {
@@ -105,17 +102,6 @@ public class SendWorker {
             eventBridgeProducer.publish(outcomeEvent);
         }
 
-        OutcomePollingRequest pollingRequest = OutcomePollingRequest.builder()
-                .requestId(request.getRequestId())
-                .xPagopaIoConCxId(request.getXPagopaIoConCxId())
-                .iun(request.getIun())
-                .recipientTaxId(request.getRecipientTaxId())
-                .ioMessageId(ioMessageId)
-                .lastKnownStatus(EventType.SENT_TO_IO)
-                .paymentData(request.getPaymentData() != null)
-                .pollingMaxDate(request.getPollingMaxDate())
-                .build();
-        pollingQueueProducer.publish(pollingRequest);
     }
 
     private boolean isRetryable(int statusCode) {
@@ -132,14 +118,6 @@ public class SendWorker {
                         .status(EventType.IO_SEND_RETRY_EXHAUSTED.name())
                         .build()))
                 .build());
-        if (EventType.IO_SEND_RETRY_EXHAUSTED.isNotify()) {
-            eventBridgeProducer.publish(OutcomeEvent.builder()
-                    .requestId(request.getRequestId())
-                    .xPagopaIoConCxId(request.getXPagopaIoConCxId())
-                    .eventType(EventType.IO_SEND_RETRY_EXHAUSTED)
-                    .eventTimestamp(Instant.now())
-                    .build());
-        }
     }
 
     private void handleSenderNotAllowed(MessageSendRequest request) {

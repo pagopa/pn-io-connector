@@ -1,7 +1,6 @@
 package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
-import it.pagopa.pn.ioconnector.exceptions.PnIOGetProfileException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOClient;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.FiscalCodePayload;
@@ -34,7 +33,7 @@ public class IOService {
                 notFound.setSenderAllowed(false);
                 return notFound;
             }
-            throw new PnIOGetProfileException(e.getStatusCode(), e.getMessage());
+            throw e;
         }
     }
 
