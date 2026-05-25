@@ -1,10 +1,8 @@
 package it.pagopa.pn.ioconnector.middleware.msclient;
 
-import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
-import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.DefaultApi;
-import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.ManageAuthorizationApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.CreatedMessage;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,7 +12,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.RestClientResponseException;
 
 import java.util.Map;
 
@@ -27,7 +24,6 @@ import static org.mockito.Mockito.when;
 class IOClientTest {
 
     @Mock private PnIoConnectorConfig config;
-    @Mock private ManageAuthorizationApi manageAuthorizationApi;
     @Mock private DefaultApi mockDefaultApi;
     @InjectMocks private IOClient ioClient;
 
@@ -53,46 +49,42 @@ class IOClientTest {
     }
 
     @Test
-    void sendMessage_throws_on404() {
+    void sendMessage_propagates_PnHttpResponseException_on404() {
         when(mockDefaultApi.submitMessageforUserWithFiscalCodeInBody(any()))
-            .thenThrow(new RestClientResponseException("Not Found", 404, "Not Found", null, null, null));
+            .thenThrow(new PnHttpResponseException("Not Found", 404));
 
         assertThatThrownBy(() -> ioClient.sendMessage(new NewMessage(), API_KEY))
-            .isInstanceOf(PnInternalException.class)
-            .satisfies(e -> assertThat(((PnInternalException) e).getProblem().getErrors().get(0).getCode())
-                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_RECIPIENT_NOT_FOUND));
+            .isInstanceOf(PnHttpResponseException.class)
+            .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(404));
     }
 
     @Test
-    void sendMessage_throws_on429() {
+    void sendMessage_propagates_PnHttpResponseException_on429() {
         when(mockDefaultApi.submitMessageforUserWithFiscalCodeInBody(any()))
-            .thenThrow(new RestClientResponseException("Too Many Requests", 429, "Too Many Requests", null, null, null));
+            .thenThrow(new PnHttpResponseException("Too Many Requests", 429));
 
         assertThatThrownBy(() -> ioClient.sendMessage(new NewMessage(), API_KEY))
-            .isInstanceOf(PnInternalException.class)
-            .satisfies(e -> assertThat(((PnInternalException) e).getProblem().getErrors().get(0).getCode())
-                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_RATE_LIMIT));
+            .isInstanceOf(PnHttpResponseException.class)
+            .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(429));
     }
 
     @Test
-    void sendMessage_throws_on500() {
+    void sendMessage_propagates_PnHttpResponseException_on500() {
         when(mockDefaultApi.submitMessageforUserWithFiscalCodeInBody(any()))
-            .thenThrow(new RestClientResponseException("Internal Server Error", 500, "Internal Server Error", null, null, null));
+            .thenThrow(new PnHttpResponseException("Internal Server Error", 500));
 
         assertThatThrownBy(() -> ioClient.sendMessage(new NewMessage(), API_KEY))
-            .isInstanceOf(PnInternalException.class)
-            .satisfies(e -> assertThat(((PnInternalException) e).getProblem().getErrors().get(0).getCode())
-                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_SERVER_ERROR));
+            .isInstanceOf(PnHttpResponseException.class)
+            .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(500));
     }
 
     @Test
-    void sendMessage_throws_on400() {
+    void sendMessage_propagates_PnHttpResponseException_on400() {
         when(mockDefaultApi.submitMessageforUserWithFiscalCodeInBody(any()))
-            .thenThrow(new RestClientResponseException("Bad Request", 400, "Bad Request", null, null, null));
+            .thenThrow(new PnHttpResponseException("Bad Request", 400));
 
         assertThatThrownBy(() -> ioClient.sendMessage(new NewMessage(), API_KEY))
-            .isInstanceOf(PnInternalException.class)
-            .satisfies(e -> assertThat(((PnInternalException) e).getProblem().getErrors().get(0).getCode())
-                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_SERVER_ERROR));
+            .isInstanceOf(PnHttpResponseException.class)
+            .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(400));
     }
 }

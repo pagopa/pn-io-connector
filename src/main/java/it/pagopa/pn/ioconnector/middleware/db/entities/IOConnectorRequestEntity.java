@@ -36,6 +36,8 @@ public class IOConnectorRequestEntity {
     private String createdAt;
     private String updatedAt;
     private Long ttl;
+    private Integer retryStep;
+    private String lastRetryTimestamp;
 
     @DynamoDbBean
     @Data

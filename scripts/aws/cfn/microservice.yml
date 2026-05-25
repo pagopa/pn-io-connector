@@ -185,6 +185,21 @@ Parameters:
     Description: 'Nome della managed policy associata ad IO Connector'
     Default: 'PnIoConnectorManagedPolicyName'
 
+  PnCommonsRetryMaxAttempts:
+    Type: Number
+    Default: 3
+    Description: 'Max attempts for pn-commons RestClientRetryable'
+
+  PnCommonsConnectionTimeoutMillis:
+    Type: Number
+    Default: 10000
+    Description: 'Connection timeout in ms for pn-commons RestClient'
+
+  PnCommonsReadTimeoutMillis:
+    Type: Number
+    Default: 30000
+    Description: 'Read timeout in ms for pn-commons RestClient'
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -215,7 +230,10 @@ Resources:
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
         ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${IOConnectorRequestsTableName}'
         ContainerEnvEntry5: !Sub 'PN_IO_CONNECTOR_SECRETS_NAME=${PnIoConnectorSecretsName}'
-        ContainerEnvEntry5: !Sub 'PN_IO_CONNECTOR_SQS_SEND_QUEUE_NAME=${IoConnectorSendQueueName}'
+        ContainerEnvEntry6: !Sub 'PN_IO_CONNECTOR_SQS_SEND_QUEUE_NAME=${IoConnectorSendQueueName}'
+        ContainerEnvEntry7: !Sub 'PN_COMMONS_RETRY_MAX_ATTEMPTS=${PnCommonsRetryMaxAttempts}'
+        ContainerEnvEntry8: !Sub 'PN_COMMONS_CONNECTION_TIMEOUT_MILLIS=${PnCommonsConnectionTimeoutMillis}'
+        ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
         MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref SubnetsIds
@@ -259,16 +277,16 @@ Resources:
               - !Ref IOConnectorRequestsTableArn
               - !Sub '${IOConnectorRequestsTableArn}/index/*'
           - Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+            Resource: !Ref IoConnectorSendQueueArn
+          - Effect: Allow
             Sid: 'ReadFromSecretsManagerIOConnectorSecrets'
             Action:
               - 'secretsmanager:DescribeSecret'
               - 'secretsmanager:GetSecretValue'
             Resource:
               - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]
-
-          - Effect: Allow
-            Action:
-              - sqs:SendMessage
-              - sqs:GetQueueUrl
-              - sqs:GetQueueAttributes
-            Resource: !Ref IoConnectorSendQueueArn

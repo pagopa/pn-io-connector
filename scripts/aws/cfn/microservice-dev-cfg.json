@@ -1,5 +1,8 @@
 {
   "Parameters" : {
-    "PnIoConnectorSecretsName":"Pn-Io-Connector-Secrets"
+    "PnIoConnectorSecretsName":"Pn-Io-Connector-Secrets",
+    "PnCommonsRetryMaxAttempts":"3",
+    "PnCommonsConnectionTimeoutMillis":"10000",
+    "PnCommonsReadTimeoutMillis":"30000"
   }
 }
