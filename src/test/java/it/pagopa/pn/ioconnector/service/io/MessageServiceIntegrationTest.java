@@ -58,6 +58,9 @@ class MessageServiceIntegrationTest {
         Optional<IOConnectorRequestEntity> saved = requestDao.findById("INT-REQ-001");
         assertThat(saved).isPresent();
         assertThat(saved.get().getStatus()).isEqualTo("ACCEPTED");
+        assertThat(saved.get().getRecipientTaxId()).isEqualTo("ANON-TAX-INT");
+        assertThat(saved.get().getSubject()).isEqualTo("Integration Test Subject");
+        assertThat(saved.get().getMarkdown()).isEqualTo("Integration test body");
 
         assertThat(saved.get().getEventList()).isNotNull();
         assertThat(saved.get().getEventList()).isNotEmpty();

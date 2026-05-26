@@ -2,11 +2,16 @@ package it.pagopa.pn.ioconnector.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import it.pagopa.pn.commons.exceptions.PnRuntimeException;
+import it.pagopa.pn.ioconnector.exceptions.PnIOGetMessageForbiddenException;
+import it.pagopa.pn.ioconnector.exceptions.PnIOGetMessageNotFoundException;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponse;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponseDetails;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetProfileRequest;
 import it.pagopa.pn.ioconnector.springbootcfg.PnErrorWebExceptionHandlerActivation;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetProfileResponse;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
+import it.pagopa.pn.ioconnector.service.io.GetMessageService;
 import it.pagopa.pn.ioconnector.service.io.MessageService;
 import it.pagopa.pn.ioconnector.service.io.ProfileService;
 import org.junit.jupiter.api.Test;
@@ -24,6 +29,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -42,6 +48,9 @@ class IOControllerTest {
 
     @MockitoBean
     private ProfileService profileService;
+
+    @MockitoBean
+    private GetMessageService getMessageService;
 
     @Test
     void sendIOMessageAccepted() throws Exception {
@@ -159,6 +168,43 @@ class IOControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildProfileRequest())))
                 .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void getMessage_200() throws Exception {
+        GetMessageResponse response = new GetMessageResponse()
+                .details(new GetMessageResponseDetails()
+                        .subject("Oggetto notifica")
+                        .markdown("Testo notifica"));
+
+        when(getMessageService.getMessageDetails(eq("test-request-id"), eq("FISCALCODE12345X")))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/messages/{id}", "test-request-id")
+                .header("fiscal_code", "FISCALCODE12345X"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.details.subject").value("Oggetto notifica"))
+                .andExpect(jsonPath("$.details.markdown").value("Testo notifica"));
+    }
+
+    @Test
+    void getMessage_403() throws Exception {
+        when(getMessageService.getMessageDetails(eq("test-request-id"), any()))
+                .thenThrow(new PnIOGetMessageForbiddenException());
+
+        mockMvc.perform(get("/messages/{id}", "test-request-id")
+                .header("fiscal_code", "FISCALCODE12345X"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void getMessage_404() throws Exception {
+        when(getMessageService.getMessageDetails(eq("test-request-id"), any()))
+                .thenThrow(new PnIOGetMessageNotFoundException("test-request-id"));
+
+        mockMvc.perform(get("/messages/{id}", "test-request-id")
+                .header("fiscal_code", "FISCALCODE12345X"))
+                .andExpect(status().isNotFound());
     }
 
     private MessageRequest buildMessageRequest() {

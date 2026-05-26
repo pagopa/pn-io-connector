@@ -3,6 +3,8 @@ package it.pagopa.pn.ioconnector.service.io;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -97,6 +99,17 @@ public class MessageService {
                 .requestId(sqsMsg.getRequestId())
                 .xPagopaIoConCxId(cxId)
                 .iun(sqsMsg.getIun())
+                .recipientTaxId(request.getRecipientTaxId())
+                .subject(sqsMsg.getSubject())
+                .markdown(sqsMsg.getMarkdown())
+                .attachments(sqsMsg.getAttachments() != null
+                        ? sqsMsg.getAttachments().stream()
+                                .map(fileKey -> IOConnectorRequestEntity.Attachment.builder()
+                                        .id(UUID.randomUUID().toString())
+                                        .fileKey(fileKey)
+                                        .build())
+                                .collect(Collectors.toList())
+                        : null)
                 .status(EventType.ACCEPTED.name())
                 .pollingMaxDate(Instant.now().plus(
                         request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48,
