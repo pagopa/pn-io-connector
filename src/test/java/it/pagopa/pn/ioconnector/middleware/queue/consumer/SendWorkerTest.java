@@ -9,6 +9,7 @@ import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
+import it.pagopa.pn.ioconnector.service.DataVaultService;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +40,7 @@ import static org.mockito.Mockito.when;
 class SendWorkerTest {
 
     @Mock private IOService ioService;
+    @Mock private DataVaultService dataVaultService;
     @Mock private IOConnectorRequestDao dao;
     @Mock private EventBridgeProducer eventBridgeProducer;
     @Mock private SqsClient sqsClient;
@@ -50,10 +52,11 @@ class SendWorkerTest {
     void senderNotAllowed_whenProfileReturnsFalse() {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(false);
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
 
         sendWorker.process(message);
 
@@ -74,10 +77,11 @@ class SendWorkerTest {
     void sendSuccess_updatesDbAndPublishesEvents() {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key"))).thenReturn("IO-MSG-001");
 
         sendWorker.process(message);
@@ -98,10 +102,11 @@ class SendWorkerTest {
     void propagatesException_onSendMessageError() {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new RuntimeException("IO 500"));
 
@@ -123,10 +128,11 @@ class SendWorkerTest {
                 .build());
         Message<MessageSendRequest> message = buildMessage(request);
 
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key"))).thenReturn("IO-MSG-002");
 
         sendWorker.process(message);
@@ -137,10 +143,11 @@ class SendWorkerTest {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
 
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new PnHttpResponseException("Too Many Requests", 429));
 
@@ -176,10 +183,11 @@ class SendWorkerTest {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
 
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new PnHttpResponseException("Service Unavailable", 503));
 
@@ -205,10 +213,11 @@ class SendWorkerTest {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
 
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new PnHttpResponseException("Bad Gateway", 502));
 
@@ -241,10 +250,11 @@ class SendWorkerTest {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
 
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new PnHttpResponseException("Not Found", 404));
 
@@ -262,10 +272,11 @@ class SendWorkerTest {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
 
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key")).thenReturn(profile);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new PnHttpResponseException("Bad Request", 400));
 
@@ -283,8 +294,9 @@ class SendWorkerTest {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
 
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
-        when(ioService.checkUserProfile(request.getRecipientTaxId(), "api-key"))
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key"))
                 .thenThrow(new PnHttpResponseException("Too Many Requests", 429));
 
         IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
@@ -313,12 +325,15 @@ class SendWorkerTest {
         verify(eventBridgeProducer, never()).publish(any());
     }
 
+    private static final String TOKEN_TAX_ID = "PF-abc123";
+    private static final String REAL_TAX_ID = "RSSMRA80A01H501U";
+
     private MessageSendRequest buildRequest() {
         return MessageSendRequest.builder()
                 .requestId("REQ-001")
                 .xPagopaIoConCxId("pn-delivery-push")
                 .iun("IUN-001")
-                .recipientTaxId("RSSMRA80A01H501U")
+                .recipientTaxId(TOKEN_TAX_ID)
                 .senderServiceId("SVC-001")
                 .subject("Test subject")
                 .markdown("Test body")

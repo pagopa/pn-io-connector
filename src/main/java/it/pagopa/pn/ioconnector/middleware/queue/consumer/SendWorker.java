@@ -10,6 +10,7 @@ import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
+import it.pagopa.pn.ioconnector.service.DataVaultService;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import java.util.List;
 public class SendWorker {
 
     private final IOService ioService;
+    private final DataVaultService dataVaultService;
     private final IOConnectorRequestDao dao;
     private final EventBridgeProducer eventBridgeProducer;
     private final SqsClient sqsClient;
@@ -42,13 +44,14 @@ public class SendWorker {
 
         String ioMessageId;
         try {
-            LimitedProfile profile = ioService.checkUserProfile(request.getRecipientTaxId(), apiKey);
+            String taxId = dataVaultService.deanonymize(request.getRecipientTaxId());
+            LimitedProfile profile = ioService.checkUserProfile(taxId, apiKey);
 
-            if (Boolean.FALSE.equals(profile.getSenderAllowed())) {
+            if (!profile.getSenderAllowed()) {
                 handleSenderNotAllowed(request);
                 return;
             }
-
+            request.setRecipientTaxId(taxId);
             ioMessageId = ioService.sendMessage(request, apiKey);
         } catch (PnHttpResponseException ex) {
             if (!isRetryable(ex.getStatusCode())) {
