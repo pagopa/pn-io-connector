@@ -200,6 +200,11 @@ Parameters:
     Default: 30000
     Description: 'Read timeout in ms for pn-commons RestClient'
 
+  PnDataVaultBaseUrl:
+    Type: String
+    Default: 'http://alb.confidential.pn.internal:8080'
+    Description: 'Base URL of pn-data-vault internal service'
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -234,6 +239,7 @@ Resources:
         ContainerEnvEntry7: !Sub 'PN_COMMONS_RETRY_MAX_ATTEMPTS=${PnCommonsRetryMaxAttempts}'
         ContainerEnvEntry8: !Sub 'PN_COMMONS_CONNECTION_TIMEOUT_MILLIS=${PnCommonsConnectionTimeoutMillis}'
         ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
+        ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
         MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref SubnetsIds
