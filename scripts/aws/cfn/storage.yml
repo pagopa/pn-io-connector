@@ -36,7 +36,7 @@ Resources:
 
   # ── DynamoDB ───────────────────────────────────────────────────────────────
 
-  PnIoConnectorRequestsTable:
+  PnIOConnectorRequestsTable:
     Type: AWS::DynamoDB::Table
     UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
@@ -97,11 +97,11 @@ Outputs:
 
   # DynamoDB
   PnIoConnectorRequestsTableName:
-    Value: !Ref PnIoConnectorRequestsTable
+    Value: !Ref PnIOConnectorRequestsTable
     Description: pn-IOConnectorRequests DynamoDB table name
 
   PnIoConnectorRequestsTableArn:
-    Value: !GetAtt PnIoConnectorRequestsTable.Arn
+    Value: !GetAtt PnIOConnectorRequestsTable.Arn
     Description: pn-IOConnectorRequests DynamoDB table ARN
 
   # SQS
