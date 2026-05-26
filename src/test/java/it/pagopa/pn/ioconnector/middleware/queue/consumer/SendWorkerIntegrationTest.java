@@ -9,6 +9,7 @@ import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
+import it.pagopa.pn.ioconnector.service.DataVaultService;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,6 +59,9 @@ class SendWorkerIntegrationTest {
     private IOService ioService;
 
     @MockBean
+    private DataVaultService dataVaultService;
+
+    @MockBean
     private EventBridgeProducer eventBridgeProducer;
 
     private String queueUrl;
@@ -65,6 +70,7 @@ class SendWorkerIntegrationTest {
     void setup() {
         queueUrl = sqsClient.getQueueUrl(r -> r.queueName(config.getSqsSendQueueName())).queueUrl();
         sqsClient.purgeQueue(r -> r.queueUrl(queueUrl));
+        when(dataVaultService.deanonymize(anyString())).thenAnswer(i -> i.getArgument(0));
     }
 
     @Test
