@@ -21,6 +21,7 @@ import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -88,10 +89,7 @@ public class SendWorker {
                 .requestId(request.getRequestId())
                 .ioMessageId(ioMessageId)
                 .status(EventType.SENT_TO_IO.name())
-                .eventList(List.of(IOConnectorRequestEntity.Event.builder()
-                        .eventDate(Instant.now().toString())
-                        .status(EventType.SENT_TO_IO.name())
-                        .build()))
+                .eventList(appendEvent(request.getRequestId(), EventType.SENT_TO_IO))
                 .build());
 
         if (EventType.SENT_TO_IO.isNotify()) {
@@ -107,6 +105,18 @@ public class SendWorker {
 
     }
 
+    private List<IOConnectorRequestEntity.Event> appendEvent(String requestId, EventType eventType) {
+        List<IOConnectorRequestEntity.Event> events = new ArrayList<>();
+        dao.findById(requestId).ifPresent(e -> {
+            if (e.getEventList() != null) events.addAll(e.getEventList());
+        });
+        events.add(IOConnectorRequestEntity.Event.builder()
+                .eventDate(Instant.now().toString())
+                .status(eventType.name())
+                .build());
+        return events;
+    }
+
     private boolean isRetryable(int statusCode) {
         return statusCode == 429 || statusCode >= 500;
     }
@@ -116,10 +126,7 @@ public class SendWorker {
         dao.update(IOConnectorRequestEntity.builder()
                 .requestId(request.getRequestId())
                 .status(EventType.IO_SEND_RETRY_EXHAUSTED.name())
-                .eventList(List.of(IOConnectorRequestEntity.Event.builder()
-                        .eventDate(Instant.now().toString())
-                        .status(EventType.IO_SEND_RETRY_EXHAUSTED.name())
-                        .build()))
+                .eventList(appendEvent(request.getRequestId(), EventType.IO_SEND_RETRY_EXHAUSTED))
                 .build());
     }
 
@@ -127,10 +134,7 @@ public class SendWorker {
         dao.update(IOConnectorRequestEntity.builder()
                 .requestId(request.getRequestId())
                 .status(EventType.SENDER_NOT_ALLOWED.name())
-                .eventList(List.of(IOConnectorRequestEntity.Event.builder()
-                        .eventDate(Instant.now().toString())
-                        .status(EventType.SENDER_NOT_ALLOWED.name())
-                        .build()))
+                .eventList(appendEvent(request.getRequestId(), EventType.SENDER_NOT_ALLOWED))
                 .build());
 
         OutcomeEvent outcomeEvent = OutcomeEvent.builder()
