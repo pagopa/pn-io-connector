@@ -160,19 +160,19 @@ Parameters:
     Type: String
     Default: ''
 
-  IOConnectorRequestsTableName:
+  PnIoConnectorRequestsTableName:
     Type: String
     Description: 'Name of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
 
-  IOConnectorRequestsTableArn:
+  PnIoConnectorRequestsTableArn:
     Type: String
     Description: 'ARN of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
 
-  IoConnectorSendQueueName:
+  PnIoConnectorSendQueueName:
     Type: String
     Description: 'Name of SQS queue pn-io-connector-send-queue (from storage.yml output)'
 
-  IoConnectorSendQueueArn:
+  PnIoConnectorSendQueueArn:
     Type: String
     Description: 'ARN of SQS queue pn-io-connector-send-queue (from storage.yml output)'
 
@@ -228,9 +228,9 @@ Resources:
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
-        ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${IOConnectorRequestsTableName}'
+        ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${PnIoConnectorRequestsTableName}'
         ContainerEnvEntry5: !Sub 'PN_IO_CONNECTOR_SECRETS_NAME=${PnIoConnectorSecretsName}'
-        ContainerEnvEntry6: !Sub 'PN_IO_CONNECTOR_SQS_SEND_QUEUE_NAME=${IoConnectorSendQueueName}'
+        ContainerEnvEntry6: !Sub 'PN_IO_CONNECTOR_SQS_SEND_QUEUE_NAME=${PnIoConnectorSendQueueName}'
         ContainerEnvEntry7: !Sub 'PN_COMMONS_RETRY_MAX_ATTEMPTS=${PnCommonsRetryMaxAttempts}'
         ContainerEnvEntry8: !Sub 'PN_COMMONS_CONNECTION_TIMEOUT_MILLIS=${PnCommonsConnectionTimeoutMillis}'
         ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
@@ -274,15 +274,17 @@ Resources:
               - dynamodb:DeleteItem
               - dynamodb:Query
             Resource:
-              - !Ref IOConnectorRequestsTableArn
-              - !Sub '${IOConnectorRequestsTableArn}/index/*'
+              - !Ref PnIoConnectorRequestsTableArn
+              - !Sub '${PnIoConnectorRequestsTableArn}/index/*'
           - Effect: Allow
             Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
               - sqs:SendMessage
               - sqs:GetQueueUrl
               - sqs:GetQueueAttributes
               - sqs:ChangeMessageVisibility
-            Resource: !Ref IoConnectorSendQueueArn
+            Resource: !Ref PnIoConnectorSendQueueArn
           - Effect: Allow
             Sid: 'ReadFromSecretsManagerIOConnectorSecrets'
             Action:
