@@ -10,6 +10,8 @@ public interface IOConnectorRequestDao {
 
     Optional<IOConnectorRequestEntity> findById(String requestId);
 
+    Optional<IOConnectorRequestEntity> findByIdConsistentRead(String requestId);
+
     Optional<IOConnectorRequestEntity> findByIoMessageId(String ioMessageId);
 
     IOConnectorRequestEntity update(IOConnectorRequestEntity entity);

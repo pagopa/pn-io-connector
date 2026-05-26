@@ -29,7 +29,7 @@ Parameters:
 
   VpcEgressSubnetsIds:
     Type: String
-    Description: 'Subnets where to install PN-CORE'
+    Description: 'Subnets where the microservice egress traffic is routed'
 
   VpcId:
     Type: String
@@ -205,6 +205,14 @@ Parameters:
     Default: 'http://alb.confidential.pn.internal:8080'
     Description: 'Base URL of pn-data-vault internal service'
 
+  PnIoConnectorEventBridgeBusName:
+    Type: String
+    Description: 'Name of the EventBridge bus for IO Connector outcome events'
+
+  PnIoConnectorEventBridgeBusArn:
+    Type: String
+    Description: 'ARN of the EventBridge bus for IO Connector outcome events'
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -240,6 +248,7 @@ Resources:
         ContainerEnvEntry8: !Sub 'PN_COMMONS_CONNECTION_TIMEOUT_MILLIS=${PnCommonsConnectionTimeoutMillis}'
         ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
         ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
+        ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${PnIoConnectorEventBridgeBusName}'
         MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
@@ -298,3 +307,9 @@ Resources:
               - 'secretsmanager:GetSecretValue'
             Resource:
               - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]
+          - Effect: Allow
+            Action:
+              - 'events:DescribeEventBus'
+              - 'events:PutEvents'
+            Resource:
+              - !Ref PnIoConnectorEventBridgeBusArn

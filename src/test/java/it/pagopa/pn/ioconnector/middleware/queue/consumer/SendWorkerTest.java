@@ -1,6 +1,7 @@
 package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
+import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
@@ -268,28 +269,6 @@ class SendWorkerTest {
     }
 
     @Test
-    void sendMessage_nonRetryableError_400_propagatesExceptionWithoutVisibilityChange() {
-        MessageSendRequest request = buildRequest();
-        Message<MessageSendRequest> message = buildMessage(request);
-
-        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
-        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
-        LimitedProfile profile = new LimitedProfile();
-        profile.setSenderAllowed(true);
-        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
-        when(ioService.sendMessage(eq(request), eq("api-key")))
-                .thenThrow(new PnHttpResponseException("Bad Request", 400));
-
-        assertThatThrownBy(() -> sendWorker.process(message))
-                .isInstanceOf(PnHttpResponseException.class)
-                .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(400));
-
-        verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
-        verify(dao, never()).update(any());
-        verify(eventBridgeProducer, never()).publish(any());
-    }
-
-    @Test
     void sendMessage_checkUserProfile_retryableError_appliesVisibilityTimeout() {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
@@ -322,6 +301,76 @@ class SendWorkerTest {
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(1);
 
+        verify(eventBridgeProducer, never()).publish(any());
+    }
+
+    @Test
+    void senderNotAllowed_whenProfileReturnsSenderAllowedNull() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        LimitedProfile profile = new LimitedProfile();
+        profile.setSenderAllowed(null);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
+
+        sendWorker.process(message);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.SENDER_NOT_ALLOWED.name());
+        verify(ioService, never()).sendMessage(any(), any());
+    }
+
+    @Test
+    void deanonymize_retryableError_429_appliesVisibilityTimeout() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID))
+                .thenThrow(new PnDataVaultException(429, "Too Many Requests"));
+
+        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .retryStep(null)
+                .build();
+        when(dao.findById(request.getRequestId())).thenReturn(Optional.of(entity));
+        when(config.getSendRetryPolicy()).thenReturn(List.of(5, 10, 20, 40));
+        when(config.getSqsSendQueueName()).thenReturn("pn-io-connector-send-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder()
+                        .queueUrl("https://sqs.us-east-1.amazonaws.com/123456789/pn-io-connector-send-queue")
+                        .build());
+
+        sendWorker.process(message);
+
+        ArgumentCaptor<ChangeMessageVisibilityRequest> visibilityCaptor =
+                ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
+        verify(sqsClient).changeMessageVisibility(visibilityCaptor.capture());
+        assertThat(visibilityCaptor.getValue().visibilityTimeout()).isEqualTo(300);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(1);
+
+        verify(eventBridgeProducer, never()).publish(any());
+    }
+
+    @Test
+    void deanonymize_nonRetryableError_400_propagatesException() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID))
+                .thenThrow(new PnDataVaultException(400, "Bad Request"));
+
+        assertThatThrownBy(() -> sendWorker.process(message))
+                .isInstanceOf(PnDataVaultException.class);
+
+        verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
+        verify(dao, never()).update(any());
         verify(eventBridgeProducer, never()).publish(any());
     }
 

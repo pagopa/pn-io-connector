@@ -3,6 +3,7 @@ package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 import io.awspring.cloud.sqs.annotation.SqsListener;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
@@ -48,14 +49,15 @@ public class SendWorker {
             String taxId = dataVaultService.deanonymize(request.getRecipientTaxId());
             LimitedProfile profile = ioService.checkUserProfile(taxId, apiKey);
 
-            if (!profile.getSenderAllowed()) {
+            if (!Boolean.TRUE.equals(profile.getSenderAllowed())) {
                 handleSenderNotAllowed(request);
                 return;
             }
             request.setRecipientTaxId(taxId);
             ioMessageId = ioService.sendMessage(request, apiKey);
-        } catch (PnHttpResponseException ex) {
-            if (!isRetryable(ex.getStatusCode())) {
+        } catch (PnHttpResponseException | PnDataVaultException ex) {
+            int statusCode = ex.getProblem().getStatus();
+            if (!isRetryable(statusCode)) {
                 throw ex;
             }
             IOConnectorRequestEntity entity = dao.findById(request.getRequestId()).orElse(null);
@@ -107,7 +109,7 @@ public class SendWorker {
 
     private List<IOConnectorRequestEntity.Event> appendEvent(String requestId, EventType eventType) {
         List<IOConnectorRequestEntity.Event> events = new ArrayList<>();
-        dao.findById(requestId).ifPresent(e -> {
+        dao.findByIdConsistentRead(requestId).ifPresent(e -> {
             if (e.getEventList() != null) events.addAll(e.getEventList());
         });
         events.add(IOConnectorRequestEntity.Event.builder()

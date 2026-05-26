@@ -42,6 +42,13 @@ public class IOConnectorRequestDaoImpl implements IOConnectorRequestDao {
     }
 
     @Override
+    public Optional<IOConnectorRequestEntity> findByIdConsistentRead(String requestId) {
+        log.debug("findByIdConsistentRead requestId={}", requestId);
+        Key key = Key.builder().partitionValue(requestId).build();
+        return Optional.ofNullable(requestsTable.getItem(r -> r.key(key).consistentRead(true)));
+    }
+
+    @Override
     public Optional<IOConnectorRequestEntity> findByIoMessageId(String ioMessageId) {
         log.debug("findByIoMessageId ioMessageId={}", ioMessageId);
         DynamoDbIndex<IOConnectorRequestEntity> index =
