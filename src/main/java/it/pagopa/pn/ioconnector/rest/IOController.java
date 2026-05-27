@@ -46,7 +46,7 @@ public class IOController implements IoApi, DefaultApi {
     }
 
     @Override
-    public ResponseEntity<GetMessageResponse> getMessage(String id, String fiscalCode, String xPagopaLollipopOriginalMethod, String xPagopaLollipopOriginalUrl, String signatureInput, String signature, String xPagopaLollipopAssertionRef, String xPagopaLollipopAssertionType, String xPagopaLollipopAuthJwt, String xPagopaLollipopPublicKey, String xPagopaLollipopUserId) {
-        return ResponseEntity.ok(getMessageService.getMessageDetails(id, fiscalCode));
+    public ResponseEntity<GetMessageResponse> getMessage(String id, String xPagopaPnCxId) {
+        return ResponseEntity.ok(getMessageService.getMessageDetails(id, xPagopaPnCxId));
     }
 }

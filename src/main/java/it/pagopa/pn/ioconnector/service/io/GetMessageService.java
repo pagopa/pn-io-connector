@@ -26,13 +26,13 @@ public class GetMessageService {
 
     private final IOConnectorRequestDao requestDao;
 
-    public GetMessageResponse getMessageDetails(String requestId, String fiscalCode) {
+    public GetMessageResponse getMessageDetails(String requestId, String cxId) {
         log.logStartingProcess(GET_MESSAGE_DETAILS);
         try {
             IOConnectorRequestEntity entity = requestDao.findById(requestId)
                     .orElseThrow(() -> new PnIOGetMessageNotFoundException(requestId));
 
-            if (!Objects.equals(fiscalCode, entity.getRecipientTaxId())) {
+            if (!Objects.equals(cxId, entity.getRecipientTaxId())) {
                 throw new PnIOGetMessageForbiddenException();
             }
 

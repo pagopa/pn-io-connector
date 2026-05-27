@@ -181,7 +181,7 @@ class IOControllerTest {
                 .thenReturn(response);
 
         mockMvc.perform(get("/messages/{id}", "test-request-id")
-                .header("fiscal_code", "FISCALCODE12345X"))
+                .header("x-pagopa-pn-cx-id", "FISCALCODE12345X"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.details.subject").value("Oggetto notifica"))
                 .andExpect(jsonPath("$.details.markdown").value("Testo notifica"));
@@ -193,7 +193,7 @@ class IOControllerTest {
                 .thenThrow(new PnIOGetMessageForbiddenException());
 
         mockMvc.perform(get("/messages/{id}", "test-request-id")
-                .header("fiscal_code", "FISCALCODE12345X"))
+                .header("x-pagopa-pn-cx-id", "FISCALCODE12345X"))
                 .andExpect(status().isForbidden());
     }
 
@@ -203,7 +203,7 @@ class IOControllerTest {
                 .thenThrow(new PnIOGetMessageNotFoundException("test-request-id"));
 
         mockMvc.perform(get("/messages/{id}", "test-request-id")
-                .header("fiscal_code", "FISCALCODE12345X"))
+                .header("x-pagopa-pn-cx-id", "FISCALCODE12345X"))
                 .andExpect(status().isNotFound());
     }
 
