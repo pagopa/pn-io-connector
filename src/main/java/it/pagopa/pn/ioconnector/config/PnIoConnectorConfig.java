@@ -23,8 +23,8 @@ import java.util.Map;
 @Data
 @Validated
 @Configuration
-@Import(SharedAutoConfiguration.class)
 @ConfigurationProperties(prefix = "pn.io-connector")
+@Import(SharedAutoConfiguration.class)
 public class PnIoConnectorConfig {
     private String ioBaseUrl;
     private String dataVaultBaseUrl;
@@ -35,6 +35,7 @@ public class PnIoConnectorConfig {
     private String eventBridgeBusName;
     private String secretsName;
     private List<Integer> sendRetryPolicy;
+    private String ioConfigurationId;
 
     @Bean
     public Map<String, String> apiKeyUseSecrets(SecretsManagerClient secretsManagerClient, ObjectMapper objectMapper) {

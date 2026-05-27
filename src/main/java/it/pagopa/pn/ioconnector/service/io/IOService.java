@@ -1,6 +1,9 @@
 package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
+import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.ioconnector.exceptions.PnIoGetProfileException;
+
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOClient;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.FiscalCodePayload;
@@ -21,6 +24,7 @@ import org.springframework.stereotype.Service;
 public class IOService {
 
     private final IOClient ioClient;
+    private final PnIoConnectorConfig pnIoConnectorConfig;
 
     public LimitedProfile checkUserProfile(String taxId, String apiKey) {
         FiscalCodePayload fiscalCodePayload = new FiscalCodePayload();
@@ -33,7 +37,7 @@ public class IOService {
                 notFound.setSenderAllowed(false);
                 return notFound;
             }
-            throw e;
+            throw new PnIoGetProfileException(e.getStatusCode(), e.getMessage());
         }
     }
 
@@ -47,6 +51,7 @@ public class IOService {
             ThirdPartyData thirdPartyData = new ThirdPartyData();
             thirdPartyData.setId(request.getRequestId());
             thirdPartyData.setHasAttachments(true);
+            thirdPartyData.setConfigurationId(pnIoConnectorConfig.getIoConfigurationId());
             content.setThirdPartyData(thirdPartyData);
         }
 

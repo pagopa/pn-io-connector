@@ -9,9 +9,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.pagopa.pn.ioconnector.model.EventType;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
@@ -25,7 +27,6 @@ import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.PaymentData;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
-import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.HANDLE_SEND_REQUEST;
@@ -68,7 +69,14 @@ public class MessageService {
                 .senderServiceId(request.getSenderServiceId())
                 .subject(request.getSubject())
                 .markdown(request.getMarkdown())
-                .attachments(request.getAttachments())
+                .attachments(request.getAttachments() != null
+                    ? request.getAttachments().stream()
+                        .map(a -> MessageSendRequest.Attachment.builder()
+                            .id(a.getId())
+                            .fileKey(a.getFileKey())
+                            .build())
+                        .collect(Collectors.toList())
+                    : null)
                 .sensitiveContent(request.getSensitiveContent())
                 .dueDate(request.getDueDate())
                 .paymentData(
@@ -141,11 +149,19 @@ public class MessageService {
                 .markdown(sqsMsg.getMarkdown())
                 .sensitiveContent(sqsMsg.getSensitiveContent())
                 .paymentData(sqsMsg.getPaymentData() != null
-                    ? IOConnectorRequestEntity.PaymentData.builder()
+                        ? IOConnectorRequestEntity.PaymentData.builder()
                         .amount(sqsMsg.getPaymentData().getAmount())
                         .noticeCode(sqsMsg.getPaymentData().getNoticeCode())
                         .creditorTaxId(sqsMsg.getPaymentData().getCreditorTaxId())
                         .build()
+                        : null)
+                .attachments(sqsMsg.getAttachments() != null
+                    ? sqsMsg.getAttachments().stream()
+                        .map(a -> IOConnectorRequestEntity.Attachment.builder()
+                            .id(a.getId())
+                            .fileKey(a.getFileKey())
+                            .build())
+                        .collect(Collectors.toList())
                     : null)
                 .status(EventType.ACCEPTED.name())
                 .pollingMaxDate(Instant.now().plus(
