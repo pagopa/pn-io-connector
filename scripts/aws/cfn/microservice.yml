@@ -270,7 +270,7 @@ Resources:
   PnIoConnectorManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: 'String'
+      Description: 'Managed policy granting pn-io-connector access to S3, SSM, DynamoDB, SQS, Secrets Manager and EventBridge'
       ManagedPolicyName: !Ref PnIoConnectorManagedPolicyName
       PolicyDocument:
         Version: 2012-10-17

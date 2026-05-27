@@ -59,6 +59,7 @@ public class IOConnectorRequestEntity {
         private String noticeCode;
         private String creditorTaxId;
         private String payee;
+        private Boolean invalidAfterDueDate;
     }
 
     @DynamoDbBean

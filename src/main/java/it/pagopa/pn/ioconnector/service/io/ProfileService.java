@@ -26,11 +26,11 @@ public class ProfileService {
             LimitedProfile lp = ioService.checkUserProfile(taxId, apiKeyUse);
             GetProfileResponse getProfileResponse = new GetProfileResponse();
             getProfileResponse.setStatus(
-                    lp.getSenderAllowed() ?
+                    Boolean.TRUE.equals(lp.getSenderAllowed()) ?
                             GetProfileResponse.StatusEnum.SENDER_ALLOWED :
                             GetProfileResponse.StatusEnum.SENDER_NOT_ALLOWED
             );
-            getProfileResponse.setPreferredLanguages(lp.getSenderAllowed() ? lp.getPreferredLanguages() : null);
+            getProfileResponse.setPreferredLanguages(Boolean.TRUE.equals(lp.getSenderAllowed()) ? lp.getPreferredLanguages() : null);
             log.logEndingProcess(GET_IO_PROFILE);
             return getProfileResponse;
         } catch (Exception e) {

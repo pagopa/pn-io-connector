@@ -59,8 +59,9 @@ public class SendWorker {
                 handleSenderNotAllowed(request);
                 return;
             }
-            request.setRecipientTaxId(taxId);
-            ioMessageId = ioService.sendMessage(request, apiKey);
+            MessageSendRequest requestToSend = message.getPayload();
+            requestToSend.setRecipientTaxId(taxId);
+            ioMessageId = ioService.sendMessage(requestToSend, apiKey);
         } catch (PnHttpResponseException | PnDataVaultException ex) {
             int statusCode = ex.getProblem().getStatus();
             if (!isRetryable(statusCode)) {
