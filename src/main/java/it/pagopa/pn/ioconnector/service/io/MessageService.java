@@ -1,14 +1,33 @@
 package it.pagopa.pn.ioconnector.service.io;
 
-import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
-import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
-import it.pagopa.pn.ioconnector.model.MessageSendRequest;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.commons.exceptions.PnRuntimeException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.sqs.SqsClient;
 
-import java.time.Instant;
+import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.PaymentData;
+import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
+import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
+import it.pagopa.pn.ioconnector.model.EventType;
+import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.HANDLE_SEND_REQUEST;
 
@@ -17,47 +36,75 @@ import static it.pagopa.pn.ioconnector.utils.LogUtils.HANDLE_SEND_REQUEST;
 @RequiredArgsConstructor
 public class MessageService {
 
-    private final ProfileService profileService;
+    private final SqsClient sqsClient;
+    private final ObjectMapper objectMapper;
+    private final PnIoConnectorConfig config;
+    private final IOConnectorRequestDao requestDao;
 
-    public MessageResponse handleSendRequest(String cxId, MessageRequest request) {
+    public Optional<MessageResponse> handleSendRequest(String cxId, MessageRequest request) {
         log.logStartingProcess(HANDLE_SEND_REQUEST);
         MDC.put("requestId", request.getRequestId());
         try {
-            boolean senderAllowed = profileService.resolveProfile(
-                request.getSenderTaxId(), request.getSenderServiceId(), request.getRecipientTaxId()
-            );
-
-            if (!senderAllowed) {
-                log.info("Profilo IO non abilitato — requestId={}", request.getRequestId());
-                log.logEndingProcess(HANDLE_SEND_REQUEST);
-                return new MessageResponse()
-                    .requestId(request.getRequestId()).cxId(cxId)
-                    .status(MessageResponse.StatusEnum.NOT_ACCEPTED);
+            Optional<IOConnectorRequestEntity> existing = requestDao.findById(request.getRequestId());
+            if (existing.isPresent()) {
+                if (isSamePayload(cxId, request, existing.get())) {
+                    log.info("Richiesta duplicata con payload identico — requestId={}", request.getRequestId());
+                    return Optional.empty();
+                } else {
+                    throw new PnRuntimeException(
+                        "Request ID already exists with different payload",
+                        PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_REQUEST_CONFLICT,
+                        HttpStatus.CONFLICT.value(),
+                        new ArrayList<>()
+                    );
+                }
             }
 
+            long pollingMaxHours = request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48;
             MessageSendRequest sqsMsg = MessageSendRequest.builder()
-                    .requestId(request.getRequestId())
-                    .cxId(cxId)
-                    .iun(request.getIun())
-                    .recipientTaxId(request.getRecipientTaxId())
-                    .senderTaxId(request.getSenderTaxId())
-                    .senderServiceId(request.getSenderServiceId())
-                    .subject(request.getSubject())
-                    .markdown(request.getMarkdown())
-                    .attachments(request.getAttachments())
-                    .sensitiveContent(request.getSensitiveContent())
-                    .createdAt(Instant.now())
-                    .build();
+                .requestId(request.getRequestId())
+                .xPagopaIoConCxId(cxId)
+                .iun(request.getIun())
+                .recipientTaxId(request.getRecipientTaxId())
+                .senderServiceId(request.getSenderServiceId())
+                .subject(request.getSubject())
+                .markdown(request.getMarkdown())
+                .attachments(request.getAttachments())
+                .sensitiveContent(request.getSensitiveContent())
+                .dueDate(request.getDueDate())
+                .paymentData(
+                    request.getPaymentData() != null ?
+                    MessageSendRequest.PaymentData.builder().
+                        amount(request.getPaymentData().getAmount()).
+                        noticeCode(request.getPaymentData().getNoticeCode()).
+                        creditorTaxId(request.getPaymentData().getCreditorTaxId()).
+                        invalidAfterDueDate(request.getPaymentData().getInvalidAfterDueDate()).
+                        build() : null)
+                .pollingMaxDate(Instant.now().plus(pollingMaxHours, ChronoUnit.HOURS))
+                .createdAt(Instant.now())
+                .build();
 
             log.info("Richiesta presa in carico — requestId={} iun={} senderServiceId={}",
                     sqsMsg.getRequestId(),
                     sqsMsg.getIun(),
                     sqsMsg.getSenderServiceId());
 
+            String messageBody;
+            try {
+                messageBody = objectMapper.writeValueAsString(sqsMsg);
+            } catch (JsonProcessingException e) {
+                throw new PnInternalException("Failed to serialize SQS message",
+                        PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_MESSAGE_SERIALIZATION_ERROR, e);
+            }
+            String queueUrl = sqsClient.getQueueUrl(r -> r.queueName(config.getSqsSendQueueName())).queueUrl();
+
+            requestDao.save(buildAcceptedEntity(cxId, sqsMsg, request));
+            sqsClient.sendMessage(r -> r.queueUrl(queueUrl).messageBody(messageBody));
+
             log.logEndingProcess(HANDLE_SEND_REQUEST);
-            return new MessageResponse()
-                .requestId(sqsMsg.getRequestId()).cxId(cxId)
-                .status(MessageResponse.StatusEnum.ACCEPTED);
+            return Optional.of(new MessageResponse()
+                .requestId(sqsMsg.getRequestId()).xPagopaIoConCxId(cxId)
+                .status(MessageResponse.StatusEnum.ACCEPTED));
 
         } catch (Exception e) {
             log.logEndingProcess(HANDLE_SEND_REQUEST, false, e.getMessage(), e);
@@ -65,5 +112,72 @@ public class MessageService {
         } finally {
             MDC.remove("requestId");
         }
+    }
+
+    private boolean isSamePayload(String cxId, MessageRequest request, IOConnectorRequestEntity entity) {
+        return Objects.equals(cxId, entity.getXPagopaIoConCxId())
+            && Objects.equals(request.getIun(), entity.getIun())
+            && Objects.equals(request.getSenderServiceId(), entity.getSenderServiceId())
+            && Objects.equals(request.getSubject(), entity.getSubject())
+            && Objects.equals(request.getMarkdown(), entity.getMarkdown())
+            && Objects.equals(request.getSensitiveContent(), entity.getSensitiveContent())
+            && isSameAttachments(request.getAttachments(), entity.getAttachments())
+            && isSamePaymentData(request.getPaymentData(), entity.getPaymentData());
+    }
+
+    private boolean isSameAttachments(List<String> requestAttachments,
+                                       List<IOConnectorRequestEntity.Attachment> entityAttachments) {
+        if (requestAttachments == null && entityAttachments == null) return true;
+        if (requestAttachments == null || entityAttachments == null) return false;
+        if (requestAttachments.size() != entityAttachments.size()) return false;
+        for (int i = 0; i < requestAttachments.size(); i++) {
+            if (!Objects.equals(requestAttachments.get(i), entityAttachments.get(i).getFileKey())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isSamePaymentData(PaymentData requestPd, IOConnectorRequestEntity.PaymentData entityPd) {
+        if (requestPd == null && entityPd == null) return true;
+        if (requestPd == null || entityPd == null) return false;
+        return Objects.equals(requestPd.getAmount(), entityPd.getAmount())
+            && Objects.equals(requestPd.getNoticeCode(), entityPd.getNoticeCode())
+            && Objects.equals(requestPd.getCreditorTaxId(), entityPd.getCreditorTaxId())
+            && Objects.equals(requestPd.getInvalidAfterDueDate(), entityPd.getInvalidAfterDueDate());
+    }
+
+    private IOConnectorRequestEntity buildAcceptedEntity(String cxId, MessageSendRequest sqsMsg, MessageRequest request) {
+        return IOConnectorRequestEntity.builder()
+                .requestId(sqsMsg.getRequestId())
+                .xPagopaIoConCxId(cxId)
+                .iun(sqsMsg.getIun())
+                .senderServiceId(sqsMsg.getSenderServiceId())
+                .subject(sqsMsg.getSubject())
+                .markdown(sqsMsg.getMarkdown())
+                .sensitiveContent(sqsMsg.getSensitiveContent())
+                .attachments(sqsMsg.getAttachments() != null
+                    ? sqsMsg.getAttachments().stream()
+                        .map(fk -> IOConnectorRequestEntity.Attachment.builder().fileKey(fk).build())
+                        .collect(Collectors.toList())
+                    : null)
+                .paymentData(sqsMsg.getPaymentData() != null
+                    ? IOConnectorRequestEntity.PaymentData.builder()
+                        .amount(sqsMsg.getPaymentData().getAmount())
+                        .noticeCode(sqsMsg.getPaymentData().getNoticeCode())
+                        .creditorTaxId(sqsMsg.getPaymentData().getCreditorTaxId())
+                        .invalidAfterDueDate(sqsMsg.getPaymentData().getInvalidAfterDueDate())
+                        .build()
+                    : null)
+                .status(EventType.ACCEPTED.name())
+                .pollingMaxDate(sqsMsg.getPollingMaxDate().toString())
+                .eventList(List.of(
+                        IOConnectorRequestEntity.Event.builder()
+                                .eventDate(Instant.now().toString())
+                                .status(EventType.ACCEPTED.name())
+                                .build()
+                ))
+                .createdAt(Instant.now().toString())
+                .build();
     }
 }

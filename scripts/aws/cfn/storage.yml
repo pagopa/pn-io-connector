@@ -32,7 +32,58 @@ Parameters:
     Type: Number
     Default: 14
 
+  PnIoConnectorEventBridgeBusName:
+    Type: String
+    Description: 'Name of the EventBridge bus for IO Connector outcome events'
+    Default: 'pn-io-connector-outcome-events-bus'
+
 Resources:
+
+  # ── DynamoDB ───────────────────────────────────────────────────────────────
+
+  PnIOConnectorRequestsTable:
+    Type: AWS::DynamoDB::Table
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      TableName: !Sub '${ProjectName}-IOConnectorRequests'
+      AttributeDefinitions:
+        - AttributeName: requestId
+          AttributeType: S
+        - AttributeName: ioMessageId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: requestId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ioMessageIdIndex
+          KeySchema:
+            - AttributeName: ioMessageId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # ── SQS ───────────────────────────────────────────────────────────────────
+
+  PnIoConnectorSendQueueStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/sqs-queue.yaml'
+      Parameters:
+        QueueName: !Sub '${ProjectName}-io-connector-send-queue'
+        HasDLQ: 'true'
+        MessageRetentionPeriod: 1209600
+        QueueHasAlarm: 'false'
+        AlarmSNSTopicName: !Ref AlarmSNSTopicName
+        VisibilityTimeout: 60
 
   # ── Log Group ──────────────────────────────────────────────────────────────
 
@@ -47,9 +98,43 @@ Resources:
         LogGroupRetention: !Ref LogRetention
         LogsKinesisSourceStreamArn: !Ref LogsKinesisSourceStreamArn
 
+  # ── EventBridge ───────────────────────────────────────────────────────────
+
+  PnIoConnectorEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Ref PnIoConnectorEventBridgeBusName
+
 Outputs:
+
+  # DynamoDB
+  PnIoConnectorRequestsTableName:
+    Value: !Ref PnIOConnectorRequestsTable
+    Description: pn-IOConnectorRequests DynamoDB table name
+
+  PnIoConnectorRequestsTableArn:
+    Value: !GetAtt PnIOConnectorRequestsTable.Arn
+    Description: pn-IOConnectorRequests DynamoDB table ARN
+
+  # SQS
+  PnIoConnectorSendQueueName:
+    Value: !GetAtt PnIoConnectorSendQueueStack.Outputs.QueueName
+    Description: pn-io-connector-send-queue name
+
+  PnIoConnectorSendQueueArn:
+    Value: !GetAtt PnIoConnectorSendQueueStack.Outputs.QueueARN
+    Description: pn-io-connector-send-queue ARN
 
   # Log Group
   EcsLogGroup:
     Value: !GetAtt PnIoConnectorLogGroup.Outputs.LogGroupName
     Description: pn-io-connector ECS log group name
+
+  # EventBridge
+  PnIoConnectorEventBridgeBusName:
+    Value: !Ref PnIoConnectorEventBus
+    Description: 'Name of the EventBridge bus for IO Connector outcome events'
+
+  PnIoConnectorEventBridgeBusArn:
+    Value: !GetAtt PnIoConnectorEventBus.Arn
+    Description: 'ARN of the EventBridge bus for IO Connector outcome events'

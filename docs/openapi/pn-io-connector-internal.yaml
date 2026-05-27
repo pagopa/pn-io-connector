@@ -15,10 +15,10 @@ paths:
       summary: Presa in carico di un messaggio verso App IO
       operationId: sendIOMessage
       description: >
-        Endpoint sincrono invocato dall'orchestratore SEND per richiedere l'invio
+        Endpoint sincrono invocato da client pagopa per richiedere l'invio
         di un messaggio a un cittadino tramite App IO. Il microservizio
-        verifica il profilo del destinatario su IO e, se il cittadino è abilitato
-        alla ricezione, accetta la richiesta e la inserisce nella coda di elaborazione.
+        verifica, salvo errori di validazione, inserisce
+        la richiesta nella coda di elaborazione.
       parameters:
         - $ref: '#/components/parameters/xPagopaIoConCxId'
       requestBody:
@@ -28,21 +28,22 @@ paths:
             schema:
               $ref: '#/components/schemas/MessageRequest'
       responses:
-        '202':
-          description: Richiesta presa in carico per elaborazione asincrona. status=[ACCEPTED]
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
         '200':
-          description: >
-            Cittadino non raggiungibile tramite IO. Il messaggio non viene accodato. status=[NOT_ACCEPTED]
+          description: Richiesta presa in carico per elaborazione asincrona.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
+        '204':
+          description: Richiesta già ricevuta con stesso requestId e stesso payload (idempotenza). Nessun contenuto restituito.
         '400':
           description: Richiesta malformata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: requestId già esistente ma con payload diverso da quello originale.
           content:
             application/json:
               schema:
@@ -136,9 +137,7 @@ components:
       type: object
       required:
         - requestId
-        - iun
         - recipientTaxId
-        - senderTaxId
         - senderServiceId
         - subject
         - markdown
@@ -155,10 +154,6 @@ components:
           type: string
           description: Codice fiscale anonimizzato del destinatario del messaggio.
           example: "ABCDEFG1234567890"
-        senderTaxId:
-          type: string
-          description: Codice fiscale dell'ente che invia il messaggio.
-          example: "12345678901"
         senderServiceId:
           type: string
           description: Id del servizio per il quale si invia una notifica.
@@ -183,6 +178,11 @@ components:
           description: Indica se il messaggio contiene informazioni o dati sensibili.
           example: false
           nullable: true
+        dueDate:
+          type: string
+          format: UTCISODateFromString
+          description: Permette di associare al messaggio un promemoria. Il formato data deve essere ISO-8601 e fuso orario UTC
+          example: 2022-09-30T22:00:00Z
         paymentData:
           $ref: '#/components/schemas/PaymentData'
         pollingMaxHours:
@@ -211,37 +211,30 @@ components:
           type: string
           description: Codice fiscale dell'ente creditore.
           example: "01234567890"
-
+        invalidAfterDueDate:
+          type: boolean
+          description: In app visualizza il pagamento come scaduto se la data attuale è successiva a dueDate
     MessageResponse:
       type: object
       properties:
-        cxId:
+        xPagopaIoConCxId:
           type: string
         requestId:
           type: string
         status:
           type: string
-          enum: [ACCEPTED, NOT_ACCEPTED]
-          description: >
-            Indica se il messaggio puo essere inviato o meno all'utente.
-            ACCEPTED = Richiesta di invio presa in carico (sender_allowed = true).
-            NOT_ACCEPTED = Richiesta di invio non accettata (sender_allowed = false o 404).
+          enum: [ACCEPTED]
+          description: Richiesta di invio presa in carico.
     GetProfileRequest:
       type: object
       required:
         - recipientTaxId
-        - senderTaxId
         - senderServiceId
       properties:
         recipientTaxId:
           type: string
           description: Codice fiscale anonimizzato del destinatario.
           example: "ABCDEFG1234567890"
-        senderTaxId:
-          type: string
-          description: >
-            Codice fiscale dell'ente mittente. Necessario per recuperare la ApiKey MANAGE.
-          example: "12345678901"
         senderServiceId:
           type: string
           description: >
