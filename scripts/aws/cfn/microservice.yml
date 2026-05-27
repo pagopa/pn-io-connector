@@ -27,9 +27,9 @@ Parameters:
     Type: String
     Description: 'The name of the ECS cluster where the microservice is going to be deployed'
 
-  SubnetsIds:
+  VpcEgressSubnetsIds:
     Type: String
-    Description: 'subnets ids comma separated list. Where to deploy the microservice'
+    Description: 'Subnets where the microservice egress traffic is routed'
 
   VpcId:
     Type: String
@@ -160,19 +160,19 @@ Parameters:
     Type: String
     Default: ''
 
-  IOConnectorRequestsTableName:
+  PnIoConnectorRequestsTableName:
     Type: String
     Description: 'Name of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
 
-  IOConnectorRequestsTableArn:
+  PnIoConnectorRequestsTableArn:
     Type: String
     Description: 'ARN of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
 
-  IoConnectorSendQueueName:
+  PnIoConnectorSendQueueName:
     Type: String
     Description: 'Name of SQS queue pn-io-connector-send-queue (from storage.yml output)'
 
-  IoConnectorSendQueueArn:
+  PnIoConnectorSendQueueArn:
     Type: String
     Description: 'ARN of SQS queue pn-io-connector-send-queue (from storage.yml output)'
 
@@ -199,6 +199,19 @@ Parameters:
     Type: Number
     Default: 30000
     Description: 'Read timeout in ms for pn-commons RestClient'
+
+  PnDataVaultBaseUrl:
+    Type: String
+    Default: 'http://alb.confidential.pn.internal:8080'
+    Description: 'Base URL of pn-data-vault internal service'
+
+  PnIoConnectorEventBridgeBusName:
+    Type: String
+    Description: 'Name of the EventBridge bus for IO Connector outcome events'
+
+  PnIoConnectorEventBridgeBusArn:
+    Type: String
+    Description: 'ARN of the EventBridge bus for IO Connector outcome events'
 
 Resources:
   PnIoConnectorMicroservice:
@@ -228,15 +241,17 @@ Resources:
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
-        ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${IOConnectorRequestsTableName}'
+        ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${PnIoConnectorRequestsTableName}'
         ContainerEnvEntry5: !Sub 'PN_IO_CONNECTOR_SECRETS_NAME=${PnIoConnectorSecretsName}'
-        ContainerEnvEntry6: !Sub 'PN_IO_CONNECTOR_SQS_SEND_QUEUE_NAME=${IoConnectorSendQueueName}'
+        ContainerEnvEntry6: !Sub 'PN_IO_CONNECTOR_SQS_SEND_QUEUE_NAME=${PnIoConnectorSendQueueName}'
         ContainerEnvEntry7: !Sub 'PN_COMMONS_RETRY_MAX_ATTEMPTS=${PnCommonsRetryMaxAttempts}'
         ContainerEnvEntry8: !Sub 'PN_COMMONS_CONNECTION_TIMEOUT_MILLIS=${PnCommonsConnectionTimeoutMillis}'
         ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
+        ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
+        ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${PnIoConnectorEventBridgeBusName}'
         MappedPaths: '/io/message*,/io/profile*'
         ECSClusterName: !Ref ECSClusterName
-        Subnets: !Ref SubnetsIds
+        Subnets: !Ref VpcEgressSubnetsIds
         VpcId: !Ref VpcId
         EcsDefaultSecurityGroup: !Ref EcsDefaultSecurityGroup
         LoadBalancerListenerArn: !Ref ApplicationLoadBalancerListenerArn
@@ -274,15 +289,17 @@ Resources:
               - dynamodb:DeleteItem
               - dynamodb:Query
             Resource:
-              - !Ref IOConnectorRequestsTableArn
-              - !Sub '${IOConnectorRequestsTableArn}/index/*'
+              - !Ref PnIoConnectorRequestsTableArn
+              - !Sub '${PnIoConnectorRequestsTableArn}/index/*'
           - Effect: Allow
             Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
               - sqs:SendMessage
               - sqs:GetQueueUrl
               - sqs:GetQueueAttributes
               - sqs:ChangeMessageVisibility
-            Resource: !Ref IoConnectorSendQueueArn
+            Resource: !Ref PnIoConnectorSendQueueArn
           - Effect: Allow
             Sid: 'ReadFromSecretsManagerIOConnectorSecrets'
             Action:
@@ -290,3 +307,9 @@ Resources:
               - 'secretsmanager:GetSecretValue'
             Resource:
               - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]
+          - Effect: Allow
+            Action:
+              - 'events:DescribeEventBus'
+              - 'events:PutEvents'
+            Resource:
+              - !Ref PnIoConnectorEventBridgeBusArn
