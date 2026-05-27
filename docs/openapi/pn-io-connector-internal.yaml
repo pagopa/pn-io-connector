@@ -109,12 +109,12 @@ paths:
           schema:
             type: string
           description: requestId — identificativo di correlazione remota passato da pn-io-connector in third_party_data.id al momento dell'invio del messaggio
-        - name: x-pagopa-pn-cx-id
+        - name: x-pagopa-cx-taxid
           in: header
           required: true
           schema:
             type: string
-          description: Identificativo cliente (internalId) iniettato dall'API Gateway da context.authorizer.cx_id dopo la validazione Lollipop. Confrontato con il destinatario del messaggio per il controllo di coerenza.
+          description: Codice fiscale anonimizzato (internalId) iniettato dall'API Gateway da context.authorizer.cx_id dopo la validazione Lollipop. Confrontato con il destinatario del messaggio per il controllo di coerenza.
       responses:
         '200':
           description: Metadati degli allegati associati al messaggio.

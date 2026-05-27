@@ -1,7 +1,6 @@
 package it.pagopa.pn.ioconnector.service.io;
 
-import it.pagopa.pn.ioconnector.exceptions.PnIOGetMessageForbiddenException;
-import it.pagopa.pn.ioconnector.exceptions.PnIOGetMessageNotFoundException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoGetMessageNotFoundException;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponse;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
@@ -132,7 +131,7 @@ class GetMessageServiceTest {
     }
 
     @Test
-    void getMessage_403_fiscalCodeMismatch() {
+    void getMessage_404_fiscalCodeMismatch() {
         IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
                 .requestId("REQ-004")
                 .recipientTaxId("FISCALCODE12345X")
@@ -142,7 +141,7 @@ class GetMessageServiceTest {
 
         when(requestDao.findById("REQ-004")).thenReturn(Optional.of(entity));
 
-        assertThrows(PnIOGetMessageForbiddenException.class,
+        assertThrows(PnIoGetMessageNotFoundException.class,
                 () -> getMessageService.getMessageDetails("REQ-004", "DIFFERENT_CODE_X"));
     }
 
@@ -150,7 +149,7 @@ class GetMessageServiceTest {
     void getMessage_404_notFound() {
         when(requestDao.findById("REQ-999")).thenReturn(Optional.empty());
 
-        assertThrows(PnIOGetMessageNotFoundException.class,
+        assertThrows(PnIoGetMessageNotFoundException.class,
                 () -> getMessageService.getMessageDetails("REQ-999", "FISCALCODE12345X"));
     }
 }
