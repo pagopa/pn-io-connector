@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -96,9 +97,9 @@ public class MessageService {
                         PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_MESSAGE_SERIALIZATION_ERROR, e);
             }
             String queueUrl = sqsClient.getQueueUrl(r -> r.queueName(config.getSqsSendQueueName())).queueUrl();
-            sqsClient.sendMessage(r -> r.queueUrl(queueUrl).messageBody(messageBody));
 
             requestDao.save(buildAcceptedEntity(cxId, sqsMsg, request));
+            sqsClient.sendMessage(r -> r.queueUrl(queueUrl).messageBody(messageBody));
 
             log.logEndingProcess(HANDLE_SEND_REQUEST);
             return Optional.of(new MessageResponse()
@@ -120,7 +121,21 @@ public class MessageService {
             && Objects.equals(request.getSubject(), entity.getSubject())
             && Objects.equals(request.getMarkdown(), entity.getMarkdown())
             && Objects.equals(request.getSensitiveContent(), entity.getSensitiveContent())
+            && isSameAttachments(request.getAttachments(), entity.getAttachments())
             && isSamePaymentData(request.getPaymentData(), entity.getPaymentData());
+    }
+
+    private boolean isSameAttachments(List<String> requestAttachments,
+                                       List<IOConnectorRequestEntity.Attachment> entityAttachments) {
+        if (requestAttachments == null && entityAttachments == null) return true;
+        if (requestAttachments == null || entityAttachments == null) return false;
+        if (requestAttachments.size() != entityAttachments.size()) return false;
+        for (int i = 0; i < requestAttachments.size(); i++) {
+            if (!Objects.equals(requestAttachments.get(i), entityAttachments.get(i).getFileKey())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean isSamePaymentData(PaymentData requestPd, IOConnectorRequestEntity.PaymentData entityPd) {
@@ -128,7 +143,8 @@ public class MessageService {
         if (requestPd == null || entityPd == null) return false;
         return Objects.equals(requestPd.getAmount(), entityPd.getAmount())
             && Objects.equals(requestPd.getNoticeCode(), entityPd.getNoticeCode())
-            && Objects.equals(requestPd.getCreditorTaxId(), entityPd.getCreditorTaxId());
+            && Objects.equals(requestPd.getCreditorTaxId(), entityPd.getCreditorTaxId())
+            && Objects.equals(requestPd.getInvalidAfterDueDate(), entityPd.getInvalidAfterDueDate());
     }
 
     private IOConnectorRequestEntity buildAcceptedEntity(String cxId, MessageSendRequest sqsMsg, MessageRequest request) {
@@ -140,17 +156,21 @@ public class MessageService {
                 .subject(sqsMsg.getSubject())
                 .markdown(sqsMsg.getMarkdown())
                 .sensitiveContent(sqsMsg.getSensitiveContent())
+                .attachments(sqsMsg.getAttachments() != null
+                    ? sqsMsg.getAttachments().stream()
+                        .map(fk -> IOConnectorRequestEntity.Attachment.builder().fileKey(fk).build())
+                        .collect(Collectors.toList())
+                    : null)
                 .paymentData(sqsMsg.getPaymentData() != null
                     ? IOConnectorRequestEntity.PaymentData.builder()
                         .amount(sqsMsg.getPaymentData().getAmount())
                         .noticeCode(sqsMsg.getPaymentData().getNoticeCode())
                         .creditorTaxId(sqsMsg.getPaymentData().getCreditorTaxId())
+                        .invalidAfterDueDate(sqsMsg.getPaymentData().getInvalidAfterDueDate())
                         .build()
                     : null)
                 .status(EventType.ACCEPTED.name())
-                .pollingMaxDate(Instant.now().plus(
-                        request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48,
-                        ChronoUnit.HOURS).toString())
+                .pollingMaxDate(sqsMsg.getPollingMaxDate().toString())
                 .eventList(List.of(
                         IOConnectorRequestEntity.Event.builder()
                                 .eventDate(Instant.now().toString())
