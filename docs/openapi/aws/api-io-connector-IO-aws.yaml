@@ -38,10 +38,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetMessageResponse'
-        '403':
-          description: Codice fiscale del chiamante non coerente con il destinatario.
         '404':
-          description: Messaggio non trovato o allegati non presenti.
+          description: Messaggio non trovato (richiesta inesistente o codice fiscale del chiamante non coerente con il destinatario).
         '500':
           description: Errore interno.
       security:
@@ -99,10 +97,8 @@ paths:
               schema:
                 type: string
                 format: uri
-        '403':
-          description: Codice fiscale del chiamante non coerente con il destinatario.
         '404':
-          description: Messaggio o allegato non trovato.
+          description: Messaggio o allegato non trovato (richiesta inesistente o codice fiscale del chiamante non coerente con il destinatario).
         '500':
           description: Errore interno.
       security:
@@ -236,6 +232,8 @@ components:
           method.request.header.x-pagopa-lollipop-auth-jwt,
           method.request.header.x-pagopa-cx-taxid
         type: request
+x-amazon-apigateway-binary-media-types:
+  - application/pdf
 x-amazon-apigateway-gateway-responses:
   DEFAULT_5XX:
     responseParameters:
