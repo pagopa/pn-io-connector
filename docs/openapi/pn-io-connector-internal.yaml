@@ -122,8 +122,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetMessageResponse'
-        '403':
-          description: Codice fiscale del chiamante non coerente con il destinatario.
         '404':
           description: Messaggio non trovato o allegati non presenti.
 
@@ -295,8 +293,7 @@ components:
                 default: application/pdf
               url:
                 type: string
-                format: uri
-                description: URL logico dell'allegato.
+                description: FileKey corrispondente all'allegato in SafeStorage
               category:
                 type: string
                 description: Categoria dell'allegato. Deve essere "DOCUMENT".
