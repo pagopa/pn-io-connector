@@ -3,6 +3,9 @@
     "PnIoConnectorSecretsName":"Pn-Io-Connector-Secrets",
     "PnCommonsRetryMaxAttempts":"3",
     "PnCommonsConnectionTimeoutMillis":"10000",
-    "PnCommonsReadTimeoutMillis":"30000"
+    "PnCommonsReadTimeoutMillis":"30000",
+    "IoApiDnsName":"api.dev.pn.pagopa.it",
+    "LollipopAuthorizerLambdaName":"pn-lollipopAuthorizerLambda",
+    "DownloadAttachmentsLambdaName":"DownloadAttachmentsLambda"
   }
 }
