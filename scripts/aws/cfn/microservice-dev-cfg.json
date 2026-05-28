@@ -4,6 +4,7 @@
     "PnCommonsRetryMaxAttempts":"3",
     "PnCommonsConnectionTimeoutMillis":"10000",
     "PnCommonsReadTimeoutMillis":"30000",
-    "PnIoConnectorIoConfigurationId": "io-configuration-id"
+    "PnIoConnectorIoConfigurationId": "io-configuration-id",
+    "DownloadModeRedirect": "false"
   }
 }

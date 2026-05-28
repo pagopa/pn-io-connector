@@ -217,6 +217,47 @@ Parameters:
     Type: String
     Description: 'IO Remote configuration for attachments download'
 
+  # ── Lambda downloadAttachment params ──────────────────────────────────────────────
+  ApiGatewayId:
+    Type: String
+    Description: 'ID of the API Gateway that invokes the downloadAttachments Lambda'
+
+  SafeStorageProtocol:
+    Type: String
+    Default: https
+    AllowedValues: [ http, https ]
+
+  SafeStorageHostname:
+    Type: String
+    Description: 'SafeStorage internal hostname'
+
+  SafeStoragePort:
+    Type: String
+    Default: '8080'
+
+  SafeStorageGetFilePath:
+    Type: String
+    Default: /safestorage/internal/v1/files
+
+  SafeStorageCxId:
+    Type: String
+    Default: pn-io-connector
+
+  SafeStorageApiKey:
+    Type: String
+    Default: pn-io-connector_api_key
+
+  SafeStoragePresignedUrlField:
+    Type: String
+    Default: download.url
+    Description: 'Dot-notation path to the presigned URL field in the SafeStorage response'
+
+  DownloadModeRedirect:
+    Type: String
+    Default: 'false'
+    AllowedValues: [ 'true', 'false' ]
+    Description: 'true returns 302 Location; false returns the PDF binary'
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -318,3 +359,72 @@ Resources:
               - 'events:PutEvents'
             Resource:
               - !Ref PnIoConnectorEventBridgeBusArn
+
+  DownloadAttachmentsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-download-attachments'
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt DownloadAttachmentsLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref MicroserviceBucketName
+        S3Key: !Sub '${MicroserviceBucketBaseKey}/functions/downloadAttachments/function.zip'
+      Timeout: 10
+      LoggingConfig:
+        LogGroup: !Sub '/aws/lambda/${ProjectName}-download-attachments'
+      TracingConfig:
+        Mode: Active
+      Layers:
+        - !Sub 'arn:aws:lambda:${AWS::Region}:339249233099:layer:LambdaInsightsExtension:13'
+      VpcConfig:
+        SubnetIds:
+          - !Select [ 0, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
+          - !Select [ 1, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
+          - !Select [ 2, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
+        SecurityGroupIds:
+          - !Ref EcsDefaultSecurityGroup
+      Environment:
+        Variables:
+          DOWNLOAD_MODE_REDIRECT: !Ref DownloadModeRedirect
+          REQUESTS_TABLE_NAME: !Ref PnIoConnectorRequestsTableName
+          PN_SAFESTORAGE_PROTOCOL: !Ref SafeStorageProtocol
+          PN_SAFESTORAGE_HOSTNAME: !sub 'http://${ApplicationLoadBalancerDomain}'
+          PN_SAFESTORAGE_PORT: !Ref SafeStoragePort
+          PN_SAFESTORAGE_GET_FILE_PATH: !Ref SafeStorageGetFilePath
+          PN_SAFESTORAGE_API_KEY: !Ref SafeStorageApiKey
+          PN_SAFESTORAGE_CX_ID: !Ref SafeStorageCxId
+          PN_SAFESTORAGE_PRESIGNED_URL: !Ref SafeStoragePresignedUrlField
+
+  DownloadAttachmentsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-download-attachment-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: DynamoDbQueryPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !Ref PnIoConnectorRequestsTableArn
+
+  DownloadAttachmentsLambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DownloadAttachmentsLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayId}/*/GET/messages/*/*'
