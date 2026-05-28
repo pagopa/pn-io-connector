@@ -24,6 +24,7 @@ public class IOConnectorRequestEntity {
 
     private String iun;
     private String xPagopaIoConCxId;
+    private String recipientTaxId;
     private String senderServiceId;
     private String subject;
     private String markdown;
@@ -47,6 +48,7 @@ public class IOConnectorRequestEntity {
     public static class Attachment {
         private String id;
         private String fileKey;
+        private String name;
     }
 
     @DynamoDbBean
