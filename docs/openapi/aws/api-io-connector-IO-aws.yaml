@@ -11,7 +11,7 @@ servers:
     x-amazon-apigateway-endpoint-configuration:
       disableExecuteApiEndpoint: true
 paths:
-  /messages/{id}:
+  /io-connector/messages/{id}:
     get:
       summary: Recupero metadati allegati di un messaggio
       operationId: getMessage
@@ -57,7 +57,7 @@ paths:
         connectionType: VPC_LINK
         timeoutInMillis: 29000
         type: http_proxy
-  /messages/{id}/{url}:
+  /io-connector/messages/{id}/{url}:
     get:
       summary: Download allegato di un messaggio
       operationId: getAttachment
@@ -106,7 +106,7 @@ paths:
       x-amazon-apigateway-request-validator: params-only
       x-amazon-apigateway-integration:
         uri: >-
-          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${stageVariables.IoDownloadAttachmentLambdaName}/invocations
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${stageVariables.DownloadAttachmentsLambdaName}/invocations
         httpMethod: POST
         requestParameters:
           integration.request.path.id: method.request.path.id

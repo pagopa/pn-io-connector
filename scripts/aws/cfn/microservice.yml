@@ -208,8 +208,9 @@ Parameters:
     Type: String
     Description: 'Name of the LollipopAuthorizer Lambda function (from pn-auth-fleet)'
 
-  IoDownloadAttachmentLambdaName:
+  DownloadAttachmentsLambdaName:
     Type: String
+    Default: 'DownloadAttachmentsLambda'
     Description: 'Name of the Lambda function implementing GET /messages/{id}/{url}'
 
   PnDataVaultBaseUrl:
@@ -261,7 +262,7 @@ Resources:
         ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
         ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
         ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${PnIoConnectorEventBridgeBusName}'
-        MappedPaths: '/io/message*,/io/profile*,/messages*'
+        MappedPaths: '/io-connector/message*,/io-connector/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
         VpcId: !Ref VpcId
@@ -345,10 +346,10 @@ Resources:
         StageVariables: !Sub |
           {"LollipopAuthorizerLambdaName":"${LollipopAuthorizerLambdaName}","IoDownloadAttachmentLambdaName":"${IoDownloadAttachmentLambdaName}"}
 
-  IoDownloadAttachmentLambdaPermission:
+  DownloadAttachmentsLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref IoDownloadAttachmentLambdaName
+      FunctionName: !Ref DownloadAttachmentsLambdaName
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PnIoConnectorIoApi.Outputs.RestApiId}/*/*/messages/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PnIoConnectorIoApi.Outputs.RestApiId}/*/*/io-connector/messages/*'

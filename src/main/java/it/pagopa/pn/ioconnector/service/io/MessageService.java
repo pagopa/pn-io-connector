@@ -152,6 +152,7 @@ public class MessageService {
                 .requestId(sqsMsg.getRequestId())
                 .xPagopaIoConCxId(cxId)
                 .iun(sqsMsg.getIun())
+                .recipientTaxId(sqsMsg.getRecipientTaxId())
                 .senderServiceId(sqsMsg.getSenderServiceId())
                 .subject(sqsMsg.getSubject())
                 .markdown(sqsMsg.getMarkdown())

@@ -9,9 +9,9 @@ tags:
     description: Operazioni verso App IO
 
 paths:
-  /io/message:
+  /io-connector/message:
     post:
-      tags: [Io]
+      tags: [IoConnector]
       summary: Presa in carico di un messaggio verso App IO
       operationId: sendIOMessage
       description: >
@@ -54,9 +54,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
-  /io/profile:
+  /io-connector/profile:
     post:
-      tags: [Io]
+      tags: [IoConnector]
       summary: Verifica raggiungibilità profilo IO del destinatario
       description: >
         Endpoint invocato dal client pagopa (es. orchestratore SEND) per
@@ -92,8 +92,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
-  /messages/{id}:
+  /io-connector/messages/{id}:
     get:
+      tags: [IoConnector]
       summary: Recupero metadati allegati di un messaggio
       description: >
         Endpoint invocato da BackEnd IO quando l'utente apre il dettaglio del messaggio
@@ -292,8 +293,7 @@ components:
                 default: application/pdf
               url:
                 type: string
-                format: uri
-                description: URL logico dell'allegato.
+                description: FileKey corrispondente all'allegato in SafeStorage
               category:
                 type: string
                 description: Categoria dell'allegato. Deve essere "DOCUMENT".

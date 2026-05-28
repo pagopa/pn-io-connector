@@ -57,13 +57,12 @@ public class GetMessageService {
             String name = StringUtils.hasText(attachment.getName())
                     ? attachment.getName()
                     : attachment.getFileKey();
-            String url = attachment.getFileKey();
             GetMessageResponseAttachmentsInner item = new GetMessageResponseAttachmentsInner()
                     .id(attachment.getId())
                     .name(name)
                     .contentType("application/pdf")
                     .category("DOCUMENT")
-                    .url(url != null ? URI.create(url) : null);
+                    .url(attachment.getFileKey());
             attachments.add(item);
         }
 

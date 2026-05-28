@@ -62,7 +62,7 @@ class IOControllerTest {
         when(messageService.handleSendRequest(eq("pn-delivery-push"), any(MessageRequest.class)))
                 .thenReturn(Optional.of(response));
 
-        mockMvc.perform(post("/io/message")
+        mockMvc.perform(post("/io-connector/message")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildMessageRequest())))
@@ -77,7 +77,7 @@ class IOControllerTest {
         when(messageService.handleSendRequest(eq("pn-delivery-push"), any(MessageRequest.class)))
                 .thenReturn(Optional.empty());
 
-        mockMvc.perform(post("/io/message")
+        mockMvc.perform(post("/io-connector/message")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildMessageRequest())))
@@ -90,7 +90,7 @@ class IOControllerTest {
                 new PnRuntimeException("conflict", "conflict", HttpStatus.CONFLICT.value(), new ArrayList<>())
         );
 
-        mockMvc.perform(post("/io/message")
+        mockMvc.perform(post("/io-connector/message")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildMessageRequest())))
@@ -99,7 +99,7 @@ class IOControllerTest {
 
     @Test
     void sendIOMessageMissingCxIdHeader() throws Exception {
-        mockMvc.perform(post("/io/message")
+        mockMvc.perform(post("/io-connector/message")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildMessageRequest())))
                 .andExpect(status().isBadRequest());
@@ -110,7 +110,7 @@ class IOControllerTest {
         MessageRequest invalidRequest = new MessageRequest()
                 .requestId("REQ-TEST-002");
 
-        mockMvc.perform(post("/io/message")
+        mockMvc.perform(post("/io-connector/message")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(invalidRequest)))
@@ -125,7 +125,7 @@ class IOControllerTest {
 
         when(profileService.getProfile(any(GetProfileRequest.class))).thenReturn(response);
 
-        mockMvc.perform(post("/io/profile")
+        mockMvc.perform(post("/io-connector/profile")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildProfileRequest())))
@@ -142,7 +142,7 @@ class IOControllerTest {
 
         when(profileService.getProfile(any(GetProfileRequest.class))).thenReturn(response);
 
-        mockMvc.perform(post("/io/profile")
+        mockMvc.perform(post("/io-connector/profile")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildProfileRequest())))
@@ -152,7 +152,7 @@ class IOControllerTest {
 
     @Test
     void getIOProfileMissingCxIdHeader() throws Exception {
-        mockMvc.perform(post("/io/profile")
+        mockMvc.perform(post("/io-connector/profile")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildProfileRequest())))
                 .andExpect(status().isBadRequest());
@@ -163,7 +163,7 @@ class IOControllerTest {
         GetProfileRequest invalidRequest = new GetProfileRequest()
                 .recipientTaxId("ANON123456789");
 
-        mockMvc.perform(post("/io/profile")
+        mockMvc.perform(post("/io-connector/profile")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(invalidRequest)))
@@ -176,7 +176,7 @@ class IOControllerTest {
                 new PnRuntimeException("error", "error", HttpStatus.INTERNAL_SERVER_ERROR.value(), new ArrayList<>())
         );
 
-        mockMvc.perform(post("/io/message")
+        mockMvc.perform(post("/io-connector/message")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildMessageRequest())))
@@ -189,7 +189,7 @@ class IOControllerTest {
                 new PnRuntimeException("error", "error", HttpStatus.INTERNAL_SERVER_ERROR.value(), new ArrayList<>())
         );
 
-        mockMvc.perform(post("/io/profile")
+        mockMvc.perform(post("/io-connector/profile")
                 .header("x-pagopa-iocon-cx-id", "pn-delivery-push")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(buildProfileRequest())))
@@ -206,7 +206,7 @@ class IOControllerTest {
         when(getMessageService.getMessageDetails(eq("test-request-id"), eq("FISCALCODE12345X")))
                 .thenReturn(response);
 
-        mockMvc.perform(get("/messages/{id}", "test-request-id")
+        mockMvc.perform(get("/io-connector/messages/{id}", "test-request-id")
                 .header("x-pagopa-cx-taxid", "FISCALCODE12345X"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.details.subject").value("Oggetto notifica"))
@@ -218,7 +218,7 @@ class IOControllerTest {
         when(getMessageService.getMessageDetails(eq("test-request-id"), any()))
                 .thenThrow(new PnIoGetMessageNotFoundException("test-request-id"));
 
-        mockMvc.perform(get("/messages/{id}", "test-request-id")
+        mockMvc.perform(get("/io-connector/messages/{id}", "test-request-id")
                 .header("x-pagopa-cx-taxid", "DIFFERENT_CODE_X"))
                 .andExpect(status().isNotFound());
     }
@@ -228,7 +228,7 @@ class IOControllerTest {
         when(getMessageService.getMessageDetails(eq("test-request-id"), any()))
                 .thenThrow(new PnIoGetMessageNotFoundException("test-request-id"));
 
-        mockMvc.perform(get("/messages/{id}", "test-request-id")
+        mockMvc.perform(get("/io-connector/messages/{id}", "test-request-id")
                 .header("x-pagopa-cx-taxid", "FISCALCODE12345X"))
                 .andExpect(status().isNotFound());
     }
