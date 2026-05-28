@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
+import it.pagopa.pn.commons.exceptions.PnRuntimeException;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
+import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,8 +18,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlResponse;
 
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.PaymentData;
+
+import java.util.List;
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,18 +42,181 @@ class MessageServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        when(sqsClient.getQueueUrl(any(java.util.function.Consumer.class)))
+        when(requestDao.findById(any())).thenReturn(Optional.empty());
+        lenient().when(sqsClient.getQueueUrl(any(java.util.function.Consumer.class)))
                 .thenReturn(GetQueueUrlResponse.builder().queueUrl("http://localhost:4566/queue/pn-io-connector-send-queue").build());
-        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
     }
 
     @Test
-    void handleSendRequest_accepted() {
-        MessageResponse result = messageService.handleSendRequest("pn-delivery-push", buildRequest());
+    void handleSendRequest_accepted() throws Exception {
+        Optional<MessageResponse> result = messageService.handleSendRequest("pn-delivery-push", buildRequest());
 
-        assertThat(result.getStatus()).isEqualTo(MessageResponse.StatusEnum.ACCEPTED);
-        assertThat(result.getRequestId()).isEqualTo("REQ-001");
-        assertThat(result.getxPagopaIoConCxId()).isEqualTo("pn-delivery-push");
+        assertThat(result).isPresent();
+        assertThat(result.get().getStatus()).isEqualTo(MessageResponse.StatusEnum.ACCEPTED);
+        assertThat(result.get().getRequestId()).isEqualTo("REQ-001");
+        assertThat(result.get().getxPagopaIoConCxId()).isEqualTo("pn-delivery-push");
+    }
+
+    @Test
+    void handleSendRequest_duplicateWithSamePayload_returns204() {
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .xPagopaIoConCxId("pn-delivery-push")
+                .iun("IUN-001")
+                .senderServiceId("SVC-001")
+                .subject("Test")
+                .markdown("body")
+                .status("ACCEPTED")
+                .build();
+        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+
+        Optional<MessageResponse> result = messageService.handleSendRequest("pn-delivery-push", buildRequest());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void handleSendRequest_duplicateWithDifferentSubject_throws409() {
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .xPagopaIoConCxId("pn-delivery-push")
+                .iun("IUN-001")
+                .senderServiceId("SVC-001")
+                .subject("Different Subject")
+                .markdown("body")
+                .status("ACCEPTED")
+                .build();
+        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", buildRequest()))
+                .isInstanceOf(PnRuntimeException.class)
+                .satisfies(ex -> assertThat(((PnRuntimeException) ex).getStatus()).isEqualTo(409));
+    }
+
+    @Test
+    void handleSendRequest_duplicateDifferentCxId_throws409() {
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .xPagopaIoConCxId("another-cx-id")
+                .iun("IUN-001")
+                .senderServiceId("SVC-001")
+                .subject("Test")
+                .markdown("body")
+                .status("ACCEPTED")
+                .build();
+        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", buildRequest()))
+                .isInstanceOf(PnRuntimeException.class)
+                .satisfies(ex -> assertThat(((PnRuntimeException) ex).getStatus()).isEqualTo(409));
+    }
+
+    @Test
+    void handleSendRequest_duplicateWithDifferentAttachments_throws409() {
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .xPagopaIoConCxId("pn-delivery-push")
+                .iun("IUN-001")
+                .senderServiceId("SVC-001")
+                .subject("Test")
+                .markdown("body")
+                .attachments(List.of(
+                        IOConnectorRequestEntity.Attachment.builder().fileKey("key1").build(),
+                        IOConnectorRequestEntity.Attachment.builder().fileKey("key-OTHER").build()))
+                .status("ACCEPTED")
+                .build();
+        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+
+        MessageRequest request = buildRequest()
+                .attachments(List.of("key1", "key2"));
+
+        assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", request))
+                .isInstanceOf(PnRuntimeException.class)
+                .satisfies(ex -> assertThat(((PnRuntimeException) ex).getStatus()).isEqualTo(409));
+    }
+
+    @Test
+    void handleSendRequest_duplicateWithSameAttachments_returns204() {
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .xPagopaIoConCxId("pn-delivery-push")
+                .iun("IUN-001")
+                .senderServiceId("SVC-001")
+                .subject("Test")
+                .markdown("body")
+                .attachments(List.of(
+                        IOConnectorRequestEntity.Attachment.builder().fileKey("key1").build(),
+                        IOConnectorRequestEntity.Attachment.builder().fileKey("key2").build()))
+                .status("ACCEPTED")
+                .build();
+        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+
+        MessageRequest request = buildRequest()
+                .attachments(List.of("key1", "key2"));
+
+        assertThat(messageService.handleSendRequest("pn-delivery-push", request)).isEmpty();
+    }
+
+
+    @Test
+    void handleSendRequest_duplicateWithDifferentInvalidAfterDueDate_throws409() {
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .xPagopaIoConCxId("pn-delivery-push")
+                .iun("IUN-001")
+                .senderServiceId("SVC-001")
+                .subject("Test")
+                .markdown("body")
+                .paymentData(IOConnectorRequestEntity.PaymentData.builder()
+                        .amount(100)
+                        .noticeCode("302000100000019421")
+                        .creditorTaxId("77777777777")
+                        .invalidAfterDueDate(false)
+                        .build())
+                .status("ACCEPTED")
+                .build();
+        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+
+        MessageRequest request = buildRequest()
+                .paymentData(new PaymentData()
+                        .amount(100)
+                        .noticeCode("302000100000019421")
+                        .creditorTaxId("77777777777")
+                        .invalidAfterDueDate(true));   // diverso
+
+        assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", request))
+                .isInstanceOf(PnRuntimeException.class)
+                .satisfies(ex -> assertThat(((PnRuntimeException) ex).getStatus()).isEqualTo(409));
+    }
+
+    @Test
+    void handleSendRequest_duplicateWithSameInvalidAfterDueDate_returns204() {
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .xPagopaIoConCxId("pn-delivery-push")
+                .iun("IUN-001")
+                .senderServiceId("SVC-001")
+                .subject("Test")
+                .markdown("body")
+                .paymentData(IOConnectorRequestEntity.PaymentData.builder()
+                        .amount(100)
+                        .noticeCode("302000100000019421")
+                        .creditorTaxId("77777777777")
+                        .invalidAfterDueDate(true)
+                        .build())
+                .status("ACCEPTED")
+                .build();
+        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+
+        MessageRequest request = buildRequest()
+                .paymentData(new PaymentData()
+                        .amount(100)
+                        .noticeCode("302000100000019421")
+                        .creditorTaxId("77777777777")
+                        .invalidAfterDueDate(true));
+
+        assertThat(messageService.handleSendRequest("pn-delivery-push", request)).isEmpty();
     }
 
     @Test

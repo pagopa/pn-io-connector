@@ -32,6 +32,11 @@ Parameters:
     Type: Number
     Default: 14
 
+  PnIoConnectorEventBridgeBusName:
+    Type: String
+    Description: 'Name of the EventBridge bus for IO Connector outcome events'
+    Default: 'pn-io-connector-outcome-events-bus'
+
 Resources:
 
   # ── DynamoDB ───────────────────────────────────────────────────────────────
@@ -93,23 +98,30 @@ Resources:
         LogGroupRetention: !Ref LogRetention
         LogsKinesisSourceStreamArn: !Ref LogsKinesisSourceStreamArn
 
+  # ── EventBridge ───────────────────────────────────────────────────────────
+
+  PnIoConnectorEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Ref PnIoConnectorEventBridgeBusName
+
 Outputs:
 
   # DynamoDB
-  IOConnectorRequestsTableName:
+  PnIoConnectorRequestsTableName:
     Value: !Ref PnIOConnectorRequestsTable
     Description: pn-IOConnectorRequests DynamoDB table name
 
-  IOConnectorRequestsTableArn:
+  PnIoConnectorRequestsTableArn:
     Value: !GetAtt PnIOConnectorRequestsTable.Arn
     Description: pn-IOConnectorRequests DynamoDB table ARN
 
   # SQS
-  IoConnectorSendQueueName:
+  PnIoConnectorSendQueueName:
     Value: !GetAtt PnIoConnectorSendQueueStack.Outputs.QueueName
     Description: pn-io-connector-send-queue name
 
-  IoConnectorSendQueueArn:
+  PnIoConnectorSendQueueArn:
     Value: !GetAtt PnIoConnectorSendQueueStack.Outputs.QueueARN
     Description: pn-io-connector-send-queue ARN
 
@@ -117,3 +129,12 @@ Outputs:
   EcsLogGroup:
     Value: !GetAtt PnIoConnectorLogGroup.Outputs.LogGroupName
     Description: pn-io-connector ECS log group name
+
+  # EventBridge
+  PnIoConnectorEventBridgeBusName:
+    Value: !Ref PnIoConnectorEventBus
+    Description: 'Name of the EventBridge bus for IO Connector outcome events'
+
+  PnIoConnectorEventBridgeBusArn:
+    Value: !GetAtt PnIoConnectorEventBus.Arn
+    Description: 'ARN of the EventBridge bus for IO Connector outcome events'

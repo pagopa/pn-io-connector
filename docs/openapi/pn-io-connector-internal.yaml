@@ -109,59 +109,12 @@ paths:
           schema:
             type: string
           description: requestId — identificativo di correlazione remota passato da pn-io-connector in third_party_data.id al momento dell'invio del messaggio
-        - name: fiscal_code
+        - name: x-pagopa-cx-taxid
           in: header
           required: true
           schema:
             type: string
-            minLength: 16
-            maxLength: 16
-          description: Codice fiscale del destinatario inviato da Backend IO
-        - name: x-pagopa-lollipop-original-method
-          in: header
-          required: false
-          schema:
-            type: string
-        - name: x-pagopa-lollipop-original-url
-          in: header
-          required: false
-          schema:
-            type: string
-        - name: signature-input
-          in: header
-          required: false
-          schema:
-            type: string
-        - name: signature
-          in: header
-          required: false
-          schema:
-            type: string
-        - name: x-pagopa-lollipop-assertion-ref
-          in: header
-          required: false
-          schema:
-            type: string
-        - name: x-pagopa-lollipop-assertion-type
-          in: header
-          required: false
-          schema:
-            type: string
-        - name: x-pagopa-lollipop-auth-jwt
-          in: header
-          required: false
-          schema:
-            type: string
-        - name: x-pagopa-lollipop-public-key
-          in: header
-          required: false
-          schema:
-            type: string
-        - name: x-pagopa-lollipop-user-id
-          in: header
-          required: false
-          schema:
-            type: string
+          description: Codice fiscale anonimizzato (internalId) iniettato dall'API Gateway da context.authorizer.cx_id dopo la validazione Lollipop. Confrontato con il destinatario del messaggio per il controllo di coerenza.
       responses:
         '200':
           description: Metadati degli allegati associati al messaggio.

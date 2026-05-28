@@ -1,7 +1,6 @@
 package it.pagopa.pn.ioconnector.service.io;
 
-import it.pagopa.pn.ioconnector.exceptions.PnIOGetMessageForbiddenException;
-import it.pagopa.pn.ioconnector.exceptions.PnIOGetMessageNotFoundException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoGetMessageNotFoundException;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponse;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponseAttachmentsInner;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponseDetails;
@@ -26,14 +25,14 @@ public class GetMessageService {
 
     private final IOConnectorRequestDao requestDao;
 
-    public GetMessageResponse getMessageDetails(String requestId, String fiscalCode) {
+    public GetMessageResponse getMessageDetails(String requestId, String cxId) {
         log.logStartingProcess(GET_MESSAGE_DETAILS);
         try {
             IOConnectorRequestEntity entity = requestDao.findById(requestId)
-                    .orElseThrow(() -> new PnIOGetMessageNotFoundException(requestId));
+                    .orElseThrow(() -> new PnIoGetMessageNotFoundException(requestId));
 
-            if (!Objects.equals(fiscalCode, entity.getRecipientTaxId())) {
-                throw new PnIOGetMessageForbiddenException();
+            if (!Objects.equals(cxId, entity.getRecipientTaxId())) {
+                throw new PnIoGetMessageNotFoundException(requestId);
             }
 
             GetMessageResponse response = buildResponse(entity);
@@ -58,9 +57,7 @@ public class GetMessageService {
             String name = StringUtils.hasText(attachment.getName())
                     ? attachment.getName()
                     : attachment.getFileKey();
-            String url = attachment.getFileKey() != null
-                    ? "/io_attachments/" + attachment.getFileKey()
-                    : null;
+            String url = attachment.getFileKey();
             GetMessageResponseAttachmentsInner item = new GetMessageResponseAttachmentsInner()
                     .id(attachment.getId())
                     .name(name)

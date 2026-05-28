@@ -12,9 +12,12 @@ import it.pagopa.pn.ioconnector.service.io.MessageService;
 import it.pagopa.pn.ioconnector.service.io.ProfileService;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.NativeWebRequest;
+
+import java.util.Optional;
 
 import java.util.Optional;
 
@@ -34,10 +37,10 @@ public class IOController implements IoApi, DefaultApi {
 
     @Override
     public ResponseEntity<MessageResponse> sendIOMessage(String xPagopaIoConCxId, MessageRequest messageRequest) {
-        MessageResponse response = messageService.handleSendRequest(xPagopaIoConCxId, messageRequest);
-        return MessageResponse.StatusEnum.ACCEPTED.equals(response.getStatus())
-            ? ResponseEntity.accepted().body(response)
-            : ResponseEntity.ok(response);
+        Optional<MessageResponse> result = messageService.handleSendRequest(xPagopaIoConCxId, messageRequest);
+        return result.isPresent()
+            ? ResponseEntity.ok(result.get())
+            : ResponseEntity.status(HttpStatus.NO_CONTENT).<MessageResponse>build();
     }
 
     @Override
@@ -46,7 +49,7 @@ public class IOController implements IoApi, DefaultApi {
     }
 
     @Override
-    public ResponseEntity<GetMessageResponse> getMessage(String id, String fiscalCode, String xPagopaLollipopOriginalMethod, String xPagopaLollipopOriginalUrl, String signatureInput, String signature, String xPagopaLollipopAssertionRef, String xPagopaLollipopAssertionType, String xPagopaLollipopAuthJwt, String xPagopaLollipopPublicKey, String xPagopaLollipopUserId) {
-        return ResponseEntity.ok(getMessageService.getMessageDetails(id, fiscalCode));
+    public ResponseEntity<GetMessageResponse> getMessage(String id, String xPagopaPnCxId) {
+        return ResponseEntity.ok(getMessageService.getMessageDetails(id, xPagopaPnCxId));
     }
 }
