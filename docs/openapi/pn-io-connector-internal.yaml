@@ -170,7 +170,7 @@ components:
         attachments:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/Attachment'
           description: Lista dei documenti allegati al messaggio.
           nullable: true
         sensitiveContent:
@@ -191,6 +191,19 @@ components:
             Numero massimo di ore per cui effettuare il polling degli esiti.
             Determinato dall'orchestratore. Default configurato: 48h.
           default: 48
+
+    Attachment:
+      type: object
+      required:
+        - id
+        - fileKey
+      properties:
+        id:
+          type: string
+          description: Identificativo dell'allegato.
+        fileKey:
+          type: string
+          description: Chiave del file allegato (deve avere estensione .pdf).
 
     PaymentData:
       type: object

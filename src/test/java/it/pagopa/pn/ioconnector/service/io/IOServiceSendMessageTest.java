@@ -1,5 +1,6 @@
 package it.pagopa.pn.ioconnector.service.io;
 
+import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOClient;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
@@ -23,6 +24,7 @@ import static org.mockito.Mockito.when;
 class IOServiceSendMessageTest {
 
     @Mock private IOClient ioClient;
+    @Mock private PnIoConnectorConfig pnIoConnectorConfig;
 
     @InjectMocks private IOService ioService;
 
@@ -41,7 +43,9 @@ class IOServiceSendMessageTest {
     @Test
     void sendMessage_setsThirdPartyDataWhenAttachmentsPresent() {
         MessageSendRequest request = buildRequest();
-        request.setAttachments(List.of("file-key-1"));
+        request.setAttachments(List.of(
+                MessageSendRequest.Attachment.builder().fileKey("file-key-1.pdf").build())
+        );
         when(ioClient.sendMessage(any(NewMessage.class), eq("api-key"))).thenReturn("IO-MSG-001");
 
         ioService.sendMessage(request, "api-key");
