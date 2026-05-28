@@ -200,6 +200,19 @@ Parameters:
     Default: 30000
     Description: 'Read timeout in ms for pn-commons RestClient'
 
+  IoApiDnsName:
+    Type: String
+    Description: 'DNS name of the API Gateway stage exposed to Backend IO'
+
+  LollipopAuthorizerLambdaName:
+    Type: String
+    Description: 'Name of the LollipopAuthorizer Lambda function (from pn-auth-fleet)'
+
+  DownloadAttachmentsLambdaName:
+    Type: String
+    Default: 'DownloadAttachmentsLambda'
+    Description: 'Name of the Lambda function implementing GET /messages/{id}/{url}'
+
   PnDataVaultBaseUrl:
     Type: String
     Default: 'http://alb.confidential.pn.internal:8080'
@@ -217,7 +230,7 @@ Parameters:
     Type: String
     Description: 'IO Remote configuration for attachments download'
 
-  # ── Lambda downloadAttachment params ──────────────────────────────────────────────
+  # -- Lambda downloadAttachment params ----------------------------------------------
   ApiGatewayId:
     Type: String
     Description: 'ID of the API Gateway that invokes the downloadAttachments Lambda'
@@ -295,7 +308,7 @@ Resources:
         ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
         ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${PnIoConnectorEventBridgeBusName}'
         ContainerEnvEntry12: !Sub 'PN_IO_CONNECTOR_IO_CONFIGURATION_ID=${PnIoConnectorIoConfigurationId}'
-        MappedPaths: '/io/message*,/io/profile*'
+        MappedPaths: '/io-connector/message*,/io-connector/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
         VpcId: !Ref VpcId
@@ -360,6 +373,33 @@ Resources:
             Resource:
               - !Ref PnIoConnectorEventBridgeBusArn
 
+  PnIoConnectorIoApi:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/api-gw-expose-service-openapi.yaml'
+      Parameters:
+        MicroServiceUniqueName: !Sub '${ProjectName}-io-connector'
+        IntendedUsage: IO_EXP
+        DnsName: !Ref IoApiDnsName
+        ProjectName: !Ref ProjectName
+        ServiceApiPath: 'io-connector'
+        NetworkLoadBalancerLink: !Ref NetworkLoadBalancerLink
+        ApplicationLoadBalancerDomain: !Ref ApplicationLoadBalancerDomain
+        AlarmSNSTopicArn: !Ref AlarmSNSTopicArn
+        CloudwatchLogKinesisStreamArn: !Ref LogsKinesisSourceStreamArn
+        OpenApiBucketName: !Ref MicroserviceBucketName
+        OpenApiBucketKey: !Sub '${MicroserviceBucketBaseKey}/docs/openapi/aws/api-io-connector-IO-aws.yaml'
+        StageVariables: !Sub |
+          {"LollipopAuthorizerLambdaName":"${LollipopAuthorizerLambdaName}","DownloadAttachmentsLambdaName":"${DownloadAttachmentsLambdaName}"}
+
+  DownloadAttachmentsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DownloadAttachmentsLambdaName
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PnIoConnectorIoApi.Outputs.RestApiId}/*/*/io-connector/messages/*'
+
   DownloadAttachmentsLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -420,11 +460,3 @@ Resources:
                   - dynamodb:Query
                 Resource:
                   - !Ref PnIoConnectorRequestsTableArn
-
-  DownloadAttachmentsLambdaApiGatewayPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt DownloadAttachmentsLambda.Arn
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayId}/*/GET/messages/*/*'

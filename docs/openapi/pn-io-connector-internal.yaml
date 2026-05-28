@@ -9,9 +9,9 @@ tags:
     description: Operazioni verso App IO
 
 paths:
-  /io/message:
+  /io-connector/message:
     post:
-      tags: [Io]
+      tags: [IoConnector]
       summary: Presa in carico di un messaggio verso App IO
       operationId: sendIOMessage
       description: >
@@ -54,9 +54,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
-  /io/profile:
+  /io-connector/profile:
     post:
-      tags: [Io]
+      tags: [IoConnector]
       summary: Verifica raggiungibilità profilo IO del destinatario
       description: >
         Endpoint invocato dal client pagopa (es. orchestratore SEND) per
@@ -92,13 +92,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
-  /messages/{id}:
+  /io-connector/messages/{id}:
     get:
+      tags: [IoConnector]
       summary: Recupero metadati allegati di un messaggio
       description: >
         Endpoint invocato da BackEnd IO quando l'utente apre il dettaglio del messaggio
-        su App IO. Viene verificato che il codice fiscale del destinatario 
-        sia coerente con quello associato al messaggio, richiesta a SafeStorage 
+        su App IO. Viene verificato che il codice fiscale del destinatario
+        sia coerente con quello associato al messaggio, richiesta a SafeStorage
         una PresignedUri per ciascun allegato e restituita una lista di metadati che
         potrà essere usata dal client App IO per richiedere il contenuto binario.
       operationId: getMessage
@@ -108,7 +109,13 @@ paths:
           required: true
           schema:
             type: string
-          description: Identificativo del messaggio su IO (ioMessageId).
+          description: requestId — identificativo di correlazione remota passato da pn-io-connector in third_party_data.id al momento dell'invio del messaggio
+        - name: x-pagopa-cx-taxid
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Codice fiscale anonimizzato (internalId) iniettato dall'API Gateway da context.authorizer.cx_id dopo la validazione Lollipop. Confrontato con il destinatario del messaggio per il controllo di coerenza.
       responses:
         '200':
           description: Metadati degli allegati associati al messaggio.
@@ -116,11 +123,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetMessageResponse'
-        '403':
-          description: Codice fiscale del chiamante non coerente con il destinatario.
         '404':
-          description: Messaggio non trovato o allegati non presenti.
-
+          description: Messaggio non trovato (richiesta inesistente o codice fiscale del chiamante non coerente con il destinatario).
 components:
   parameters:
     xPagopaIoConCxId:
@@ -302,8 +306,7 @@ components:
                 default: application/pdf
               url:
                 type: string
-                format: uri
-                description: URL logico dell'allegato.
+                description: FileKey corrispondente all'allegato in SafeStorage
               category:
                 type: string
                 description: Categoria dell'allegato. Deve essere "DOCUMENT".
