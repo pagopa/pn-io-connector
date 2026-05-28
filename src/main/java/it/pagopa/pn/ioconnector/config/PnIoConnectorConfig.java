@@ -23,8 +23,8 @@ import java.util.Map;
 @Data
 @Validated
 @Configuration
-@ConfigurationProperties(prefix = "pn.io-connector")
 @Import(SharedAutoConfiguration.class)
+@ConfigurationProperties(prefix = "pn.io-connector")
 public class PnIoConnectorConfig {
     private String ioBaseUrl;
     private String dataVaultBaseUrl;
