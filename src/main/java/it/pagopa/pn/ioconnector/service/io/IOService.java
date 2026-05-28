@@ -37,6 +37,9 @@ public class IOService {
                 notFound.setSenderAllowed(false);
                 return notFound;
             }
+            if (e.getStatusCode() == 429 || e.getStatusCode() >= 500) {
+                throw e;
+            }
             throw new PnIoGetProfileException(e.getStatusCode(), e.getMessage());
         }
     }
