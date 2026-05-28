@@ -21,7 +21,7 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/fiscalCode'
+        - $ref: '#/components/parameters/cxTaxId'
         - $ref: '#/components/parameters/lollipopOriginalMethod'
         - $ref: '#/components/parameters/lollipopOriginalUrl'
         - $ref: '#/components/parameters/lollipopPublicKey'
@@ -54,16 +54,7 @@ paths:
         httpMethod: GET
         requestParameters:
           integration.request.path.id: method.request.path.id
-          integration.request.header.fiscal_code: method.request.header.fiscal_code
-          integration.request.header.x-pagopa-lollipop-original-method: method.request.header.x-pagopa-lollipop-original-method
-          integration.request.header.x-pagopa-lollipop-original-url: method.request.header.x-pagopa-lollipop-original-url
-          integration.request.header.x-pagopa-lollipop-public-key: method.request.header.x-pagopa-lollipop-public-key
-          integration.request.header.x-pagopa-lollipop-assertion-ref: method.request.header.x-pagopa-lollipop-assertion-ref
-          integration.request.header.x-pagopa-lollipop-assertion-type: method.request.header.x-pagopa-lollipop-assertion-type
-          integration.request.header.x-pagopa-lollipop-auth-jwt: method.request.header.x-pagopa-lollipop-auth-jwt
-          integration.request.header.x-pagopa-lollipop-user-id: method.request.header.x-pagopa-lollipop-user-id
-          integration.request.header.signature-input: method.request.header.signature-input
-          integration.request.header.signature: method.request.header.signature
+          integration.request.header.x-pagopa-cx-taxid: context.authorizer.cx_id
         passthroughBehavior: when_no_match
         connectionType: VPC_LINK
         timeoutInMillis: 29000
@@ -83,7 +74,7 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/fiscalCode'
+        - $ref: '#/components/parameters/cxTaxId'
         - $ref: '#/components/parameters/lollipopOriginalMethod'
         - $ref: '#/components/parameters/lollipopOriginalUrl'
         - $ref: '#/components/parameters/lollipopPublicKey'
@@ -124,24 +115,15 @@ paths:
         requestParameters:
           integration.request.path.id: method.request.path.id
           integration.request.path.url: method.request.path.url
-          integration.request.header.fiscal_code: method.request.header.fiscal_code
-          integration.request.header.x-pagopa-lollipop-original-method: method.request.header.x-pagopa-lollipop-original-method
-          integration.request.header.x-pagopa-lollipop-original-url: method.request.header.x-pagopa-lollipop-original-url
-          integration.request.header.x-pagopa-lollipop-public-key: method.request.header.x-pagopa-lollipop-public-key
-          integration.request.header.x-pagopa-lollipop-assertion-ref: method.request.header.x-pagopa-lollipop-assertion-ref
-          integration.request.header.x-pagopa-lollipop-assertion-type: method.request.header.x-pagopa-lollipop-assertion-type
-          integration.request.header.x-pagopa-lollipop-auth-jwt: method.request.header.x-pagopa-lollipop-auth-jwt
-          integration.request.header.x-pagopa-lollipop-user-id: method.request.header.x-pagopa-lollipop-user-id
-          integration.request.header.signature-input: method.request.header.signature-input
-          integration.request.header.signature: method.request.header.signature
+          integration.request.header.x-pagopa-cx-taxid: context.authorizer.cx_id
         passthroughBehavior: when_no_match
         contentHandling: CONVERT_TO_TEXT
         timeoutInMillis: 29000
         type: aws_proxy
 components:
   parameters:
-    fiscalCode:
-      name: fiscal_code
+    cxTaxId:
+      name: x-pagopa-cx-taxid
       in: header
       required: true
       schema:
@@ -150,7 +132,7 @@ components:
         maxLength: 16
         pattern: >-
           ^[A-Z]{6}[0-9LMNPQRSTUV]{2}[A-Z]{1}[0-9LMNPQRSTUV]{2}[A-Z]{1}[0-9LMNPQRSTUV]{3}[A-Z]{1}$
-      description: Codice fiscale del destinatario inviato da Backend IO
+      description: Codice fiscale del destinatario inviato da Backend IO (identitySource per il LollipopAuthorizer; sostituito nell'integrazione con l'internalId via context.authorizer.cx_id)
     lollipopOriginalMethod:
       name: x-pagopa-lollipop-original-method
       in: header
@@ -252,7 +234,7 @@ components:
         authorizerResultTtlInSeconds: 300
         identitySource: >-
           method.request.header.x-pagopa-lollipop-auth-jwt,
-          method.request.header.fiscal_code
+          method.request.header.x-pagopa-cx-taxid
         type: request
 x-amazon-apigateway-gateway-responses:
   DEFAULT_5XX:
