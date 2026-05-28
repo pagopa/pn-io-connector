@@ -249,7 +249,7 @@ Resources:
         ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
         ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
         ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${PnIoConnectorEventBridgeBusName}'
-        MappedPaths: '/io/message*,/io/profile*,/messages*'
+        MappedPaths: '/io-connector/message*,/io-connector/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
         VpcId: !Ref VpcId

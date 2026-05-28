@@ -1,7 +1,6 @@
 package it.pagopa.pn.ioconnector.rest;
 
-import it.pagopa.pn.ioconnector.generated.openapi.server.v1.api.DefaultApi;
-import it.pagopa.pn.ioconnector.generated.openapi.server.v1.api.IoApi;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.api.IoConnectorApi;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponse;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetProfileRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetProfileResponse;
@@ -22,7 +21,7 @@ import java.util.Optional;
 @CustomLog
 @RestController
 @RequiredArgsConstructor
-public class IOController implements IoApi, DefaultApi {
+public class IOController implements IoConnectorApi {
 
     private final MessageService messageService;
     private final ProfileService profileService;
