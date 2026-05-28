@@ -200,6 +200,18 @@ Parameters:
     Default: 30000
     Description: 'Read timeout in ms for pn-commons RestClient'
 
+  IoApiDnsName:
+    Type: String
+    Description: 'DNS name of the API Gateway stage exposed to Backend IO'
+
+  LollipopAuthorizerLambdaName:
+    Type: String
+    Description: 'Name of the LollipopAuthorizer Lambda function (from pn-auth-fleet)'
+
+  IoDownloadAttachmentLambdaName:
+    Type: String
+    Description: 'Name of the Lambda function implementing GET /messages/{id}/{url}'
+
   PnDataVaultBaseUrl:
     Type: String
     Default: 'http://alb.confidential.pn.internal:8080'
@@ -313,3 +325,30 @@ Resources:
               - 'events:PutEvents'
             Resource:
               - !Ref PnIoConnectorEventBridgeBusArn
+
+  PnIoConnectorIoApi:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/api-gw-expose-service-openapi.yaml'
+      Parameters:
+        MicroServiceUniqueName: !Sub '${ProjectName}-io-connector'
+        IntendedUsage: IO_EXP
+        DnsName: !Ref IoApiDnsName
+        ProjectName: !Ref ProjectName
+        ServiceApiPath: 'io-connector'
+        NetworkLoadBalancerLink: !Ref NetworkLoadBalancerLink
+        ApplicationLoadBalancerDomain: !Ref ApplicationLoadBalancerDomain
+        AlarmSNSTopicArn: !Ref AlarmSNSTopicArn
+        CloudwatchLogKinesisStreamArn: !Ref LogsKinesisSourceStreamArn
+        OpenApiBucketName: !Ref MicroserviceBucketName
+        OpenApiBucketKey: !Sub '${MicroserviceBucketBaseKey}/docs/openapi/aws/api-io-connector-IO-aws.yaml'
+        StageVariables: !Sub |
+          {"LollipopAuthorizerLambdaName":"${LollipopAuthorizerLambdaName}","IoDownloadAttachmentLambdaName":"${IoDownloadAttachmentLambdaName}"}
+
+  IoDownloadAttachmentLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IoDownloadAttachmentLambdaName
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PnIoConnectorIoApi.Outputs.RestApiId}/*/*/messages/*'

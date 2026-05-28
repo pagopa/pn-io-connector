@@ -124,8 +124,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GetMessageResponse'
         '404':
-          description: Messaggio non trovato o allegati non presenti.
-
+          description: Messaggio non trovato (richiesta inesistente o codice fiscale del chiamante non coerente con il destinatario).
 components:
   parameters:
     xPagopaIoConCxId:
