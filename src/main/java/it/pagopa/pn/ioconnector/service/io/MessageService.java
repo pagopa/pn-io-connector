@@ -117,6 +117,7 @@ public class MessageService {
     private boolean isSamePayload(String cxId, MessageRequest request, IOConnectorRequestEntity entity) {
         return Objects.equals(cxId, entity.getXPagopaIoConCxId())
             && Objects.equals(request.getIun(), entity.getIun())
+            && Objects.equals(request.getRecipientTaxId(), entity.getRecipientTaxId())
             && Objects.equals(request.getSenderServiceId(), entity.getSenderServiceId())
             && Objects.equals(request.getSubject(), entity.getSubject())
             && Objects.equals(request.getMarkdown(), entity.getMarkdown())

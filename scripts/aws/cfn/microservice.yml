@@ -344,7 +344,7 @@ Resources:
         OpenApiBucketName: !Ref MicroserviceBucketName
         OpenApiBucketKey: !Sub '${MicroserviceBucketBaseKey}/docs/openapi/aws/api-io-connector-IO-aws.yaml'
         StageVariables: !Sub |
-          {"LollipopAuthorizerLambdaName":"${LollipopAuthorizerLambdaName}","IoDownloadAttachmentLambdaName":"${IoDownloadAttachmentLambdaName}"}
+          {"LollipopAuthorizerLambdaName":"${LollipopAuthorizerLambdaName}","DownloadAttachmentsLambdaName":"${DownloadAttachmentsLambdaName}"}
 
   DownloadAttachmentsLambdaPermission:
     Type: AWS::Lambda::Permission

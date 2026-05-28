@@ -6,6 +6,6 @@
     "PnCommonsReadTimeoutMillis":"30000",
     "IoApiDnsName":"api.dev.pn.pagopa.it",
     "LollipopAuthorizerLambdaName":"pn-lollipopAuthorizerLambda",
-    "IoDownloadAttachmentLambdaName":"pn-ioDownloadAttachmentLambda"
+    "DownloadAttachmentsLambdaName":"DownloadAttachmentsLambda"
   }
 }
