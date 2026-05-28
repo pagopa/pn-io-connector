@@ -141,13 +141,15 @@ public class SendWorker {
                 .eventList(appendEvent(request.getRequestId(), EventType.ATTACHMENTS_VALIDATION_FAILED))
                 .build());
 
-        OutcomeEvent outcomeEvent = OutcomeEvent.builder()
-                .requestId(request.getRequestId())
-                .xPagopaIoConCxId(request.getXPagopaIoConCxId())
-                .eventType(EventType.ATTACHMENTS_VALIDATION_FAILED)
-                .eventTimestamp(Instant.now())
-                .build();
-        eventBridgeProducer.publish(outcomeEvent);
+        if (EventType.ATTACHMENTS_VALIDATION_FAILED.isNotify()) {
+            OutcomeEvent outcomeEvent = OutcomeEvent.builder()
+                    .requestId(request.getRequestId())
+                    .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                    .eventType(EventType.ATTACHMENTS_VALIDATION_FAILED)
+                    .eventTimestamp(Instant.now())
+                    .build();
+            eventBridgeProducer.publish(outcomeEvent);
+        }
     }
 
     private boolean isRetryable(int statusCode) {
