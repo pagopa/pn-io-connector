@@ -231,18 +231,10 @@ Parameters:
     Description: 'IO Remote configuration for attachments download'
 
   # -- Lambda downloadAttachment params ----------------------------------------------
-  ApiGatewayId:
-    Type: String
-    Description: 'ID of the API Gateway that invokes the downloadAttachments Lambda'
-
   SafeStorageProtocol:
     Type: String
-    Default: https
+    Default: http
     AllowedValues: [ http, https ]
-
-  SafeStorageHostname:
-    Type: String
-    Description: 'SafeStorage internal hostname'
 
   SafeStoragePort:
     Type: String
@@ -429,7 +421,7 @@ Resources:
           DOWNLOAD_MODE_REDIRECT: !Ref DownloadModeRedirect
           REQUESTS_TABLE_NAME: !Ref PnIoConnectorRequestsTableName
           PN_SAFESTORAGE_PROTOCOL: !Ref SafeStorageProtocol
-          PN_SAFESTORAGE_HOSTNAME: !Sub 'http://${ApplicationLoadBalancerDomain}'
+          PN_SAFESTORAGE_HOSTNAME: !Sub '${ApplicationLoadBalancerDomain}'
           PN_SAFESTORAGE_PORT: !Ref SafeStoragePort
           PN_SAFESTORAGE_GET_FILE_PATH: !Ref SafeStorageGetFilePath
           PN_SAFESTORAGE_API_KEY: !Ref SafeStorageApiKey
