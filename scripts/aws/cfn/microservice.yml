@@ -366,7 +366,7 @@ Resources:
       TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/api-gw-expose-service-openapi.yaml'
       Parameters:
         MicroServiceUniqueName: !Sub '${ProjectName}-io-connector'
-        IntendedUsage: IO_EXP
+        IntendedUsage: IO
         DnsName: !Ref IoApiDnsName
         ProjectName: !Ref ProjectName
         ServiceApiPath: 'io-connector'
