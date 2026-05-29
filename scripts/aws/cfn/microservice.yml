@@ -400,7 +400,7 @@ Resources:
       Role: !GetAtt DownloadAttachmentsLambdaRole.Arn
       Code:
         S3Bucket: !Ref MicroserviceBucketName
-        S3Key: !Sub '${MicroserviceBucketBaseKey}/functions/downloadAttachments/function.zip'
+        S3Key: !Sub '${MicroserviceBucketBaseKey}/functions_zip/downloadAttachments.zip'
       Timeout: 10
       LoggingConfig:
         LogGroup: !Sub '/aws/lambda/${ProjectName}-download-attachments'
