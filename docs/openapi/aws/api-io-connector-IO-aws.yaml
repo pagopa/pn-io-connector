@@ -86,10 +86,7 @@ paths:
         '200':
           description: Contenuto binario dell'allegato (modalità bytestream).
           content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
+            application/pdf: {}
         '302':
           description: Redirect alla presignedUri di SafeStorage.
           headers:
