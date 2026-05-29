@@ -377,6 +377,12 @@ Resources:
         OpenApiBucketName: !Ref MicroserviceBucketName
         OpenApiBucketKey: !Sub '${MicroserviceBucketBaseKey}/docs/openapi/aws/api-io-connector-IO-aws.yaml'
 
+  DownloadAttachmentsLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${ProjectName}-download-attachments-lambda-sg'
+      VpcId: !Ref VpcId
+
   DownloadAttachmentsLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -408,7 +414,7 @@ Resources:
           - !Select [ 1, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
           - !Select [ 2, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
         SecurityGroupIds:
-          - !Ref EcsDefaultSecurityGroup
+          - !GetAtt DownloadAttachmentsLambdaSecurityGroup.GroupId
       Environment:
         Variables:
           DOWNLOAD_MODE_REDIRECT: !Ref DownloadModeRedirect
