@@ -429,7 +429,7 @@ Resources:
           DOWNLOAD_MODE_REDIRECT: !Ref DownloadModeRedirect
           REQUESTS_TABLE_NAME: !Ref PnIoConnectorRequestsTableName
           PN_SAFESTORAGE_PROTOCOL: !Ref SafeStorageProtocol
-          PN_SAFESTORAGE_HOSTNAME: !sub 'http://${ApplicationLoadBalancerDomain}'
+          PN_SAFESTORAGE_HOSTNAME: !Sub 'http://${ApplicationLoadBalancerDomain}'
           PN_SAFESTORAGE_PORT: !Ref SafeStoragePort
           PN_SAFESTORAGE_GET_FILE_PATH: !Ref SafeStorageGetFilePath
           PN_SAFESTORAGE_API_KEY: !Ref SafeStorageApiKey
