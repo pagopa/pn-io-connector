@@ -208,11 +208,6 @@ Parameters:
     Type: String
     Description: 'Name of the LollipopAuthorizer Lambda function (from pn-auth-fleet)'
 
-  DownloadAttachmentsLambdaName:
-    Type: String
-    Default: 'DownloadAttachmentsLambda'
-    Description: 'Name of the Lambda function implementing GET /messages/{id}/{url}'
-
   PnDataVaultBaseUrl:
     Type: String
     Default: 'http://alb.confidential.pn.internal:8080'
@@ -381,13 +376,11 @@ Resources:
         CloudwatchLogKinesisStreamArn: !Ref LogsKinesisSourceStreamArn
         OpenApiBucketName: !Ref MicroserviceBucketName
         OpenApiBucketKey: !Sub '${MicroserviceBucketBaseKey}/docs/openapi/aws/api-io-connector-IO-aws.yaml'
-        StageVariables: !Sub |
-          {"LollipopAuthorizerLambdaName":"${LollipopAuthorizerLambdaName}","DownloadAttachmentsLambdaName":"${DownloadAttachmentsLambdaName}"}
 
   DownloadAttachmentsLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref DownloadAttachmentsLambdaName
+      FunctionName: !GetAtt DownloadAttachmentsLambda.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PnIoConnectorIoApi.Outputs.RestApiId}/*/*/io-connector/messages/*'
