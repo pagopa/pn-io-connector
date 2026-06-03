@@ -208,11 +208,6 @@ Parameters:
     Type: String
     Description: 'Name of the LollipopAuthorizer Lambda function (from pn-auth-fleet)'
 
-  DownloadAttachmentsLambdaName:
-    Type: String
-    Default: 'DownloadAttachmentsLambda'
-    Description: 'Name of the Lambda function implementing GET /messages/{id}/{url}'
-
   PnDataVaultBaseUrl:
     Type: String
     Default: 'http://alb.confidential.pn.internal:8080'
@@ -229,6 +224,39 @@ Parameters:
   PnIoConnectorIoConfigurationId:
     Type: String
     Description: 'IO Remote configuration for attachments download'
+
+  # -- Lambda downloadAttachment params ----------------------------------------------
+  SafeStorageProtocol:
+    Type: String
+    Default: http
+    AllowedValues: [ http, https ]
+
+  SafeStoragePort:
+    Type: String
+    Default: '8080'
+
+  SafeStorageGetFilePath:
+    Type: String
+    Default: /safestorage/internal/v1/files
+
+  SafeStorageCxId:
+    Type: String
+    Default: pn-io-connector
+
+  SafeStorageApiKey:
+    Type: String
+    Default: pn-io-connector_api_key
+
+  SafeStoragePresignedUrlField:
+    Type: String
+    Default: download.url
+    Description: 'Dot-notation path to the presigned URL field in the SafeStorage response'
+
+  DownloadModeRedirect:
+    Type: String
+    Default: 'false'
+    AllowedValues: [ 'true', 'false' ]
+    Description: 'true returns 302 Location; false returns the PDF binary'
 
 Resources:
   PnIoConnectorMicroservice:
@@ -338,7 +366,7 @@ Resources:
       TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/api-gw-expose-service-openapi.yaml'
       Parameters:
         MicroServiceUniqueName: !Sub '${ProjectName}-io-connector'
-        IntendedUsage: IO_EXP
+        IntendedUsage: IO
         DnsName: !Ref IoApiDnsName
         ProjectName: !Ref ProjectName
         ServiceApiPath: 'io-connector'
@@ -348,13 +376,78 @@ Resources:
         CloudwatchLogKinesisStreamArn: !Ref LogsKinesisSourceStreamArn
         OpenApiBucketName: !Ref MicroserviceBucketName
         OpenApiBucketKey: !Sub '${MicroserviceBucketBaseKey}/docs/openapi/aws/api-io-connector-IO-aws.yaml'
-        StageVariables: !Sub |
-          {"LollipopAuthorizerLambdaName":"${LollipopAuthorizerLambdaName}","DownloadAttachmentsLambdaName":"${DownloadAttachmentsLambdaName}"}
+
+  DownloadAttachmentsLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${ProjectName}-download-attachments-lambda-sg'
+      VpcId: !Ref VpcId
 
   DownloadAttachmentsLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref DownloadAttachmentsLambdaName
+      FunctionName: !GetAtt DownloadAttachmentsLambda.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PnIoConnectorIoApi.Outputs.RestApiId}/*/*/io-connector/messages/*'
+
+  DownloadAttachmentsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-download-attachments'
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt DownloadAttachmentsLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref MicroserviceBucketName
+        S3Key: !Sub '${MicroserviceBucketBaseKey}/functions_zip/downloadAttachments.zip'
+      Timeout: 10
+      LoggingConfig:
+        LogGroup: !Sub '/aws/lambda/${ProjectName}-download-attachments'
+      TracingConfig:
+        Mode: Active
+      Layers:
+        - !Sub 'arn:aws:lambda:${AWS::Region}:339249233099:layer:LambdaInsightsExtension:13'
+      VpcConfig:
+        SubnetIds:
+          - !Select [ 0, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
+          - !Select [ 1, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
+          - !Select [ 2, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
+        SecurityGroupIds:
+          - !GetAtt DownloadAttachmentsLambdaSecurityGroup.GroupId
+      Environment:
+        Variables:
+          DOWNLOAD_MODE_REDIRECT: !Ref DownloadModeRedirect
+          REQUESTS_TABLE_NAME: !Ref PnIoConnectorRequestsTableName
+          PN_SAFESTORAGE_PROTOCOL: !Ref SafeStorageProtocol
+          PN_SAFESTORAGE_HOSTNAME: !Sub '${ApplicationLoadBalancerDomain}'
+          PN_SAFESTORAGE_PORT: !Ref SafeStoragePort
+          PN_SAFESTORAGE_GET_FILE_PATH: !Ref SafeStorageGetFilePath
+          PN_SAFESTORAGE_API_KEY: !Ref SafeStorageApiKey
+          PN_SAFESTORAGE_CX_ID: !Ref SafeStorageCxId
+          PN_SAFESTORAGE_PRESIGNED_URL: !Ref SafeStoragePresignedUrlField
+
+  DownloadAttachmentsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-download-attachment-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: DynamoDbQueryPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !Ref PnIoConnectorRequestsTableArn
