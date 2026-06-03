@@ -391,6 +391,52 @@ class SendWorkerTest {
     }
 
     @Test
+    void invalidAttachmentFormat_nonPdfExtension_updatesDbAndPublishesEvent() {
+        MessageSendRequest request = buildRequest();
+        request.setAttachments(List.of(
+                MessageSendRequest.Attachment.builder().fileKey("documento.docx").build()
+        ));
+        Message<MessageSendRequest> message = buildMessage(request);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+
+        sendWorker.process(message);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.ATTACHMENTS_VALIDATION_FAILED.name());
+        assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
+        assertThat(entityCaptor.getValue().getEventList().get(0).getStatus())
+                .isEqualTo(EventType.ATTACHMENTS_VALIDATION_FAILED.name());
+
+        if (EventType.ATTACHMENTS_VALIDATION_FAILED.isNotify()) {
+            ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+            verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+            assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.ATTACHMENTS_VALIDATION_FAILED);
+            assertThat(outcomeCaptor.getValue().getRequestId()).isEqualTo(request.getRequestId());
+        }
+
+        verify(ioService, never()).sendMessage(any(), any());
+    }
+
+    @Test
+    void invalidAttachmentFormat_nullFileKey_updatesDbAndPublishesEvent() {
+        MessageSendRequest request = buildRequest();
+        request.setAttachments(List.of(
+                MessageSendRequest.Attachment.builder().fileKey(null).build()
+        ));
+        Message<MessageSendRequest> message = buildMessage(request);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+
+        sendWorker.process(message);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.ATTACHMENTS_VALIDATION_FAILED.name());
+
+        verify(ioService, never()).sendMessage(any(), any());
+    }
+
+    @Test
     void deanonymize_nonRetryableError_400_propagatesException() {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);

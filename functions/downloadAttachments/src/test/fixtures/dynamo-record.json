@@ -1,0 +1,16 @@
+{
+  "requestId": "req-001",
+  "iun": "ABCD-EFGH-0000-0001-K",
+  "ioMessageId": "io-msg-abc123",
+  "xPagopaIoConCxId": "PF-internal-id-001",
+  "recipientTaxId": "RSSMRA80A01H501T",
+  "senderServiceId": "service-001",
+  "subject": "Notifica Atto",
+  "markdown": "Hai ricevuto una notifica.",
+  "attachments": [
+    { "id": "attach-001", "fileKey": "safestorage-key-xyz" }
+  ],
+  "status": "SENT_TO_IO",
+  "createdAt": "2025-01-01T10:00:00Z",
+  "updatedAt": "2025-01-01T10:01:00Z"
+}

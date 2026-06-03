@@ -1,6 +1,7 @@
 package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ExternalMessageResponseWithContent;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.MessageContent;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.PaymentData;
@@ -15,7 +16,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -25,6 +29,7 @@ import static org.mockito.Mockito.when;
 class IOServiceTest {
 
     @Mock private IOClient ioClient;
+    @Mock private it.pagopa.pn.ioconnector.config.PnIoConnectorConfig pnIoConnectorConfig;
     @InjectMocks private IOService ioService;
 
     private static final String API_KEY = "test-api-key";
@@ -138,5 +143,32 @@ class IOServiceTest {
 
         assertThat(captor.getValue().getContent().getPaymentData()).isNull();
         assertThat(captor.getValue().getContent().getDueDate()).isNull();
+    }
+
+    @Test
+    void sendMessage_withValidPdfAttachments_setsThirdPartyData() {
+        var attachment = MessageSendRequest.Attachment.builder()
+                .id("attach-1")
+                .fileKey("documento.pdf")
+                .build();
+        var request = MessageSendRequest.builder()
+                .requestId("REQ-ATTACH-001")
+                .recipientTaxId("RSSMRA80A01H501U")
+                .subject("Con allegati")
+                .markdown("Testo")
+                .attachments(List.of(attachment))
+                .build();
+
+        when(ioClient.sendMessage(any(NewMessage.class), eq(API_KEY))).thenReturn("IO-MSG-003");
+
+        ioService.sendMessage(request, API_KEY);
+
+        ArgumentCaptor<NewMessage> captor = ArgumentCaptor.forClass(NewMessage.class);
+        verify(ioClient).sendMessage(captor.capture(), eq(API_KEY));
+
+        var thirdPartyData = captor.getValue().getContent().getThirdPartyData();
+        assertThat(thirdPartyData).isNotNull();
+        assertThat(thirdPartyData.getId()).isEqualTo("REQ-ATTACH-001");
+        assertThat(thirdPartyData.getHasAttachments()).isTrue();
     }
 }

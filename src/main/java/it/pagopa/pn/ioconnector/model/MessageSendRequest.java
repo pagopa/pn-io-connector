@@ -21,12 +21,21 @@ public class MessageSendRequest {
     private String senderServiceId;
     private String subject;
     private String markdown;
-    private List<String> attachments;
+    private List<Attachment> attachments;
     private Boolean sensitiveContent;
     private String dueDate;
     private PaymentData paymentData;
     private Instant pollingMaxDate;
     private Instant createdAt;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Attachment {
+        private String id;
+        private String fileKey;
+    }
 
     @Data
     @Builder

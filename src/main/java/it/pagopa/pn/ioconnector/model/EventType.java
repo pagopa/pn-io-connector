@@ -14,7 +14,8 @@ public enum EventType {
     READ(true),
     PAID(true),
     POLLING_EXHAUSTED(false),
-    IO_SEND_RETRY_EXHAUSTED(false);
+    IO_SEND_RETRY_EXHAUSTED(false),
+    ATTACHMENTS_VALIDATION_FAILED(false);
 
     private final boolean notify;
 }

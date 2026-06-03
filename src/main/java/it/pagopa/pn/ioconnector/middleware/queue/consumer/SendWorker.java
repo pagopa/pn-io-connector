@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static it.pagopa.pn.commons.exceptions.PnExceptionsCodes.ERROR_CODE_PN_GENERIC_ERROR;
 
@@ -52,6 +53,11 @@ public class SendWorker {
         String receiptHandle = (String) message.getHeaders().get("Sqs_ReceiptHandle");
 
         String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
+
+        if (!isAttachmentFormatValid(request)) {
+            handleInvalidAttachmentFormat(request);
+            return;
+        }
 
         String ioMessageId;
         try {
@@ -163,6 +169,32 @@ public class SendWorker {
                 .status(eventType.name())
                 .build());
         return events;
+    }
+
+    private boolean isAttachmentFormatValid(MessageSendRequest request) {
+        if (request.getAttachments() == null || request.getAttachments().isEmpty()) return true;
+        return request.getAttachments().stream()
+                .allMatch(a -> a.getFileKey() != null
+                        && a.getFileKey().toLowerCase(Locale.ROOT).endsWith(".pdf"));
+    }
+
+    private void handleInvalidAttachmentFormat(MessageSendRequest request) {
+        log.error("Invalid attachment format for requestId={}", request.getRequestId());
+        dao.update(IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .status(EventType.ATTACHMENTS_VALIDATION_FAILED.name())
+                .eventList(appendEvent(request.getRequestId(), EventType.ATTACHMENTS_VALIDATION_FAILED))
+                .build());
+
+        if (EventType.ATTACHMENTS_VALIDATION_FAILED.isNotify()) {
+            OutcomeEvent outcomeEvent = OutcomeEvent.builder()
+                    .requestId(request.getRequestId())
+                    .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                    .eventType(EventType.ATTACHMENTS_VALIDATION_FAILED)
+                    .eventTimestamp(Instant.now())
+                    .build();
+            eventBridgeProducer.publish(outcomeEvent);
+        }
     }
 
     private boolean isRetryable(int statusCode) {
