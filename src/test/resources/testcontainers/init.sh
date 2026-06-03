@@ -16,6 +16,7 @@ SECRETS_NAME="Pn-IO-Connector-Secrets"
 
 SQS_QUEUES=(
   "pn-io-connector-send-queue"
+  "pn-io-connector-polling-queue"
 )
 
 ## LOGGING FUNCTIONS ##

@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class OutcomePollingRequest {
@@ -18,9 +18,10 @@ public class OutcomePollingRequest {
     private String iun;
     private String recipientTaxId;
     private String ioMessageId;
+    private String senderServiceId;
     private boolean paymentData;
     private EventType lastKnownStatus;
     private Instant pollingMaxDate;
-    private Instant nextPollAfter;
+    private long pollingIntervalSeconds;
     private int attemptCount;
 }

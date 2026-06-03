@@ -1,5 +1,8 @@
 package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
@@ -9,6 +12,7 @@ import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
 import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
+import it.pagopa.pn.ioconnector.model.OutcomePollingRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.service.DataVaultService;
 import it.pagopa.pn.ioconnector.service.io.IOService;
@@ -17,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
@@ -24,6 +29,8 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlResponse;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
 
 import java.time.Instant;
 import java.util.List;
@@ -46,6 +53,9 @@ class SendWorkerTest {
     @Mock private EventBridgeProducer eventBridgeProducer;
     @Mock private SqsClient sqsClient;
     @Mock private PnIoConnectorConfig config;
+    @Spy  private ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     @InjectMocks private SendWorker sendWorker;
 
@@ -75,7 +85,7 @@ class SendWorkerTest {
     }
 
     @Test
-    void sendSuccess_updatesDbAndPublishesEvents() {
+    void sendSuccess_updatesDbAndPublishesEvents() throws Exception {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
         when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
@@ -84,6 +94,10 @@ class SendWorkerTest {
         profile.setSenderAllowed(true);
         when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key"))).thenReturn("IO-MSG-001");
+        when(config.getSqsPollingQueueName()).thenReturn("pn-io-connector-polling-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder().queueUrl("https://sqs/polling-queue").build());
+        when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
         sendWorker.process(message);
 
@@ -97,6 +111,14 @@ class SendWorkerTest {
         ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
         verify(eventBridgeProducer).publish(outcomeCaptor.capture());
         assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.SENT_TO_IO);
+
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(sqsClient).sendMessage(sqsCaptor.capture());
+        OutcomePollingRequest pollingRequest = objectMapper.readValue(
+                sqsCaptor.getValue().messageBody(), OutcomePollingRequest.class);
+        assertThat(pollingRequest.getLastKnownStatus()).isEqualTo(EventType.SENT_TO_IO);
+        assertThat(pollingRequest.getAttemptCount()).isEqualTo(0);
+        assertThat(pollingRequest.getSenderServiceId()).isEqualTo("SVC-001");
     }
 
     @Test
@@ -120,7 +142,7 @@ class SendWorkerTest {
     }
 
     @Test
-    void buildsPollingRequest_withPaymentData() {
+    void buildsPollingRequest_withPaymentData() throws Exception {
         MessageSendRequest request = buildRequest();
         request.setPaymentData(MessageSendRequest.PaymentData.builder()
                 .amount(100)
@@ -135,8 +157,19 @@ class SendWorkerTest {
         profile.setSenderAllowed(true);
         when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
         when(ioService.sendMessage(eq(request), eq("api-key"))).thenReturn("IO-MSG-002");
+        when(config.getSqsPollingQueueName()).thenReturn("pn-io-connector-polling-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder().queueUrl("https://sqs/polling-queue").build());
+        when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
         sendWorker.process(message);
+
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(sqsClient).sendMessage(sqsCaptor.capture());
+        OutcomePollingRequest pollingRequest = objectMapper.readValue(
+                sqsCaptor.getValue().messageBody(), OutcomePollingRequest.class);
+        assertThat(pollingRequest.isPaymentData()).isTrue();
+        assertThat(pollingRequest.getSenderServiceId()).isEqualTo("SVC-001");
     }
 
     @Test
