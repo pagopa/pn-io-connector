@@ -347,10 +347,11 @@ class PollingWorkerTest {
     }
 
     private Message<OutcomePollingRequest> buildMessage(OutcomePollingRequest request, long elapsedSeconds) {
-        long sentTimestamp = Instant.now().minusSeconds(elapsedSeconds).toEpochMilli();
-        return MessageBuilder.withPayload(request)
+        OutcomePollingRequest requestWithTimestamp = request.toBuilder()
+                .enqueuedAt(Instant.now().minusSeconds(elapsedSeconds).toEpochMilli())
+                .build();
+        return MessageBuilder.withPayload(requestWithTimestamp)
                 .setHeader("Sqs_ReceiptHandle", "test-receipt-handle")
-                .setHeader("SentTimestamp", sentTimestamp)
                 .build();
     }
 }

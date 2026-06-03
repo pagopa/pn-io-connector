@@ -47,7 +47,9 @@ public class PollingWorker {
         Instant now = Instant.now();
 
         if (request.getAttemptCount() > 0) {
-            Instant sentTimestamp = Instant.ofEpochMilli((Long) message.getHeaders().get("SentTimestamp"));
+            Instant sentTimestamp = request.getEnqueuedAt() != null
+                    ? Instant.ofEpochMilli(request.getEnqueuedAt())
+                    : Instant.now();
             long elapsed = Duration.between(sentTimestamp, now).getSeconds();
             long remainingInterval = request.getPollingIntervalSeconds() - elapsed;
             if (remainingInterval > 0) {
@@ -128,6 +130,7 @@ public class PollingWorker {
                 .pollingMaxDate(request.getPollingMaxDate())
                 .pollingIntervalSeconds(request.getPollingIntervalSeconds())
                 .attemptCount(request.getAttemptCount() + 1)
+                .enqueuedAt(Instant.now().toEpochMilli())
                 .build();
         try {
             String queueUrl = sqsClient.getQueueUrl(GetQueueUrlRequest.builder()

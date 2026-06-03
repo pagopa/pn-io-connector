@@ -144,6 +144,7 @@ public class SendWorker {
                 .pollingMaxDate(pollingMaxDate)
                 .pollingIntervalSeconds(pollingIntervalSeconds)
                 .attemptCount(0)
+                .enqueuedAt(now.toEpochMilli())
                 .build();
 
         try {
