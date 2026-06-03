@@ -15,5 +15,6 @@ public final class PnIoConnectorExceptionCodes extends PnExceptionsCodes {
     public static final String ERROR_CODE_IOCONNECTOR_REQUEST_CONFLICT = "PN_IOCONNECTOR_REQUEST_CONFLICT";
 
     public static final String ERROR_CODE_IOCONNECTOR_GET_MESSAGE_NOT_FOUND = "PN_IOCONNECTOR_GET_MESSAGE_NOT_FOUND";
+    public static final String ERROR_CODE_IOCONNECTOR_IO_MESSAGE_NOT_FOUND = "PN_IOCONNECTOR_IO_MESSAGE_NOT_FOUND";
 
 }
