@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.pagopa.pn.ioconnector.model.EventType;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
@@ -21,12 +22,12 @@ import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.Attachment;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.PaymentData;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
-import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.HANDLE_SEND_REQUEST;
@@ -69,7 +70,14 @@ public class MessageService {
                 .senderServiceId(request.getSenderServiceId())
                 .subject(request.getSubject())
                 .markdown(request.getMarkdown())
-                .attachments(request.getAttachments())
+                .attachments(request.getAttachments() != null
+                    ? request.getAttachments().stream()
+                        .map(a -> MessageSendRequest.Attachment.builder()
+                            .id(a.getId())
+                            .fileKey(a.getFileKey())
+                            .build())
+                        .collect(Collectors.toList())
+                    : null)
                 .sensitiveContent(request.getSensitiveContent())
                 .dueDate(request.getDueDate())
                 .paymentData(
@@ -126,13 +134,16 @@ public class MessageService {
             && isSamePaymentData(request.getPaymentData(), entity.getPaymentData());
     }
 
-    private boolean isSameAttachments(List<String> requestAttachments,
+    private boolean isSameAttachments(List<Attachment> requestAttachments,
                                        List<IOConnectorRequestEntity.Attachment> entityAttachments) {
         if (requestAttachments == null && entityAttachments == null) return true;
         if (requestAttachments == null || entityAttachments == null) return false;
         if (requestAttachments.size() != entityAttachments.size()) return false;
         for (int i = 0; i < requestAttachments.size(); i++) {
-            if (!Objects.equals(requestAttachments.get(i), entityAttachments.get(i).getFileKey())) {
+            Attachment req = requestAttachments.get(i);
+            IOConnectorRequestEntity.Attachment ent = entityAttachments.get(i);
+            if (!Objects.equals(req.getId(), ent.getId())
+                    || !Objects.equals(req.getFileKey(), ent.getFileKey())) {
                 return false;
             }
         }
@@ -158,18 +169,21 @@ public class MessageService {
                 .subject(sqsMsg.getSubject())
                 .markdown(sqsMsg.getMarkdown())
                 .sensitiveContent(sqsMsg.getSensitiveContent())
-                .attachments(sqsMsg.getAttachments() != null
-                    ? sqsMsg.getAttachments().stream()
-                        .map(fk -> IOConnectorRequestEntity.Attachment.builder().fileKey(fk).build())
-                        .collect(Collectors.toList())
-                    : null)
                 .paymentData(sqsMsg.getPaymentData() != null
-                    ? IOConnectorRequestEntity.PaymentData.builder()
+                        ? IOConnectorRequestEntity.PaymentData.builder()
                         .amount(sqsMsg.getPaymentData().getAmount())
                         .noticeCode(sqsMsg.getPaymentData().getNoticeCode())
                         .creditorTaxId(sqsMsg.getPaymentData().getCreditorTaxId())
                         .invalidAfterDueDate(sqsMsg.getPaymentData().getInvalidAfterDueDate())
                         .build()
+                        : null)
+                .attachments(sqsMsg.getAttachments() != null
+                    ? sqsMsg.getAttachments().stream()
+                        .map(a -> IOConnectorRequestEntity.Attachment.builder()
+                            .id(a.getId())
+                            .fileKey(a.getFileKey())
+                            .build())
+                        .collect(Collectors.toList())
                     : null)
                 .status(EventType.ACCEPTED.name())
                 .pollingMaxDate(sqsMsg.getPollingMaxDate().toString())

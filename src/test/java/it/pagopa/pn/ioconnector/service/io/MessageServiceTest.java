@@ -2,6 +2,7 @@ package it.pagopa.pn.ioconnector.service.io;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.Attachment;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.MessageResponse;
 import it.pagopa.pn.commons.exceptions.PnRuntimeException;
@@ -130,7 +131,9 @@ class MessageServiceTest {
         when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
 
         MessageRequest request = buildRequest()
-                .attachments(List.of("key1", "key2"));
+                .attachments(List.of(
+                        new Attachment().fileKey("key1"),
+                        new Attachment().fileKey("key2")));
 
         assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", request))
                 .isInstanceOf(PnRuntimeException.class)
@@ -155,7 +158,9 @@ class MessageServiceTest {
         when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
 
         MessageRequest request = buildRequest()
-                .attachments(List.of("key1", "key2"));
+                .attachments(List.of(
+                        new Attachment().fileKey("key1"),
+                        new Attachment().fileKey("key2")));
 
         assertThat(messageService.handleSendRequest("pn-delivery-push", request)).isEmpty();
     }

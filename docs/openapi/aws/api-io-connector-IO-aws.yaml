@@ -86,10 +86,7 @@ paths:
         '200':
           description: Contenuto binario dell'allegato (modalità bytestream).
           content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
+            application/pdf: {}
         '302':
           description: Redirect alla presignedUri di SafeStorage.
           headers:
@@ -106,7 +103,7 @@ paths:
       x-amazon-apigateway-request-validator: params-only
       x-amazon-apigateway-integration:
         uri: >-
-          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${stageVariables.DownloadAttachmentsLambdaName}/invocations
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:pn-download-attachments/invocations
         httpMethod: POST
         requestParameters:
           integration.request.path.id: method.request.path.id
@@ -226,7 +223,7 @@ components:
       x-amazon-apigateway-authtype: custom
       x-amazon-apigateway-authorizer:
         authorizerUri: >-
-          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${stageVariables.LollipopAuthorizerLambdaName}/invocations
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:pn-lollipopAuthorizerLambda/invocations
         authorizerResultTtlInSeconds: 300
         identitySource: >-
           method.request.header.x-pagopa-lollipop-auth-jwt,
