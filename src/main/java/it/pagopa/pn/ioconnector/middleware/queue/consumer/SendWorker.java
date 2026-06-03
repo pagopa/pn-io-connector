@@ -1,7 +1,10 @@
 package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.annotation.SqsListener;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
@@ -10,6 +13,7 @@ import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
 import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
+import it.pagopa.pn.ioconnector.model.OutcomePollingRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.service.DataVaultService;
 import it.pagopa.pn.ioconnector.service.io.IOService;
@@ -20,10 +24,14 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+
+import static it.pagopa.pn.commons.exceptions.PnExceptionsCodes.ERROR_CODE_PN_GENERIC_ERROR;
 
 @Component
 @CustomLog
@@ -36,6 +44,7 @@ public class SendWorker {
     private final EventBridgeProducer eventBridgeProducer;
     private final SqsClient sqsClient;
     private final PnIoConnectorConfig config;
+    private final ObjectMapper objectMapper;
 
     @SqsListener(value = "${pn.io-connector.sqs-send-queue-name}")
     public void process(Message<MessageSendRequest> message) {
@@ -106,6 +115,42 @@ public class SendWorker {
             eventBridgeProducer.publish(outcomeEvent);
         }
 
+        publishPollingRequest(request, ioMessageId);
+    }
+
+    private void publishPollingRequest(MessageSendRequest request, String ioMessageId) {
+        Instant now = Instant.now();
+        Instant pollingMaxDate = request.getPollingMaxDate() != null
+                ? request.getPollingMaxDate()
+                : now.plus(Duration.ofHours(config.getPollingIntervalHours()));
+        long windowSeconds = Duration.between(now, pollingMaxDate).getSeconds();
+        long pollingIntervalSeconds = Math.max(900, Math.min(21600, windowSeconds / 4));
+
+        OutcomePollingRequest pollingRequest = OutcomePollingRequest.builder()
+                .requestId(request.getRequestId())
+                .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                .iun(request.getIun())
+                .recipientTaxId(request.getRecipientTaxId())
+                .ioMessageId(ioMessageId)
+                .senderServiceId(request.getSenderServiceId())
+                .paymentData(request.getPaymentData() != null)
+                .lastKnownStatus(EventType.SENT_TO_IO)
+                .pollingMaxDate(pollingMaxDate)
+                .pollingIntervalSeconds(pollingIntervalSeconds)
+                .attemptCount(0)
+                .build();
+
+        try {
+            String queueUrl = sqsClient.getQueueUrl(GetQueueUrlRequest.builder()
+                    .queueName(config.getSqsPollingQueueName())
+                    .build()).queueUrl();
+            sqsClient.sendMessage(SendMessageRequest.builder()
+                    .queueUrl(queueUrl)
+                    .messageBody(objectMapper.writeValueAsString(pollingRequest))
+                    .build());
+        } catch (JsonProcessingException e) {
+            throw new PnInternalException("Failed to serialize OutcomePollingRequest", ERROR_CODE_PN_GENERIC_ERROR, e);
+        }
     }
 
     private List<IOConnectorRequestEntity.Event> appendEvent(String requestId, EventType eventType) {

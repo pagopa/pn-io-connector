@@ -35,6 +35,7 @@ public class PnIoConnectorConfig {
     private String eventBridgeBusName;
     private String secretsName;
     private List<Integer> sendRetryPolicy;
+    private int pollingIntervalHours;
 
     @Bean
     public Map<String, String> apiKeyUseSecrets(SecretsManagerClient secretsManagerClient, ObjectMapper objectMapper) {
