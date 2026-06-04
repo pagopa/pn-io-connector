@@ -413,7 +413,7 @@ Resources:
       FunctionName: !GetAtt DownloadAttachmentsLambda.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PnIoConnectorIoApi.Outputs.RestApiId}/*/*/io-connector/messages/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PnIoConnectorIoApi.Outputs.RestApiId}/*/*/messages/*'
 
   DownloadAttachmentsLambda:
     Type: AWS::Lambda::Function
