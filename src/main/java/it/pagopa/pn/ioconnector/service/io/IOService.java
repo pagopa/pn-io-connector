@@ -1,6 +1,7 @@
 package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ExternalMessageResponseWithContent;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.exceptions.PnIoGetProfileException;
 
@@ -12,8 +13,11 @@ import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.Payee;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.PaymentData;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ThirdPartyData;
+import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.OutcomeEvent;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
+
+import java.time.Instant;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -78,10 +82,29 @@ public class IOService {
         return ioClient.sendMessage(newMessage, apiKey);
     }
 
-    public OutcomeEvent getMessageStatus(String taxId, String ioMessageId, String apiKey) {
-        // TODO: mappare ExternalMessageResponseWithContent → OutcomeEvent
-        ioClient.getMessageStatus(taxId, ioMessageId, apiKey);
-        return null;
+    public OutcomeEvent getMessageStatus(String requestId, String xPagopaIoConCxId,
+                                         String taxId, String ioMessageId, String apiKey) {
+        ExternalMessageResponseWithContent response = ioClient.getMessageStatus(taxId, ioMessageId, apiKey);
+        if (response == null) {
+            return null;
+        }
+        return OutcomeEvent.builder()
+                .requestId(requestId)
+                .xPagopaIoConCxId(xPagopaIoConCxId)
+                .ioMessageId(ioMessageId)
+                .eventType(mapToEventType(response))
+                .eventTimestamp(Instant.now())
+                .build();
+    }
+
+    private EventType mapToEventType(ExternalMessageResponseWithContent response) {
+        if ("PAID".equals(response.getPaymentStatus())) {
+            return EventType.PAID;
+        }
+        if ("READ".equals(response.getReadStatus())) {
+            return EventType.READ;
+        }
+        return EventType.DELIVERED_TO_USER;
     }
 
     public String getServiceUseKey(String serviceId) {

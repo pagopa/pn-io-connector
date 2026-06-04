@@ -4,6 +4,7 @@ import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.DefaultApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.CreatedMessage;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ExternalMessageResponseWithContent;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -86,5 +88,45 @@ class IOClientTest {
         assertThatThrownBy(() -> ioClient.sendMessage(new NewMessage(), API_KEY))
             .isInstanceOf(PnHttpResponseException.class)
             .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(400));
+    }
+
+    @Test
+    void getMessageStatus_returnsResponse() {
+        var expected = new ExternalMessageResponseWithContent();
+        when(mockDefaultApi.getMessage(eq("FISCAL_CODE"), eq("IO-MSG-001"))).thenReturn(expected);
+
+        ExternalMessageResponseWithContent result = ioClient.getMessageStatus("FISCAL_CODE", "IO-MSG-001", API_KEY);
+
+        assertThat(result).isSameAs(expected);
+    }
+
+    @Test
+    void getMessageStatus_propagates_PnHttpResponseException_on404() {
+        when(mockDefaultApi.getMessage(any(), any()))
+            .thenThrow(new PnHttpResponseException("Not Found", 404));
+
+        assertThatThrownBy(() -> ioClient.getMessageStatus("FISCAL_CODE", "IO-MSG-001", API_KEY))
+            .isInstanceOf(PnHttpResponseException.class)
+            .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(404));
+    }
+
+    @Test
+    void getMessageStatus_propagates_PnHttpResponseException_on429() {
+        when(mockDefaultApi.getMessage(any(), any()))
+            .thenThrow(new PnHttpResponseException("Too Many Requests", 429));
+
+        assertThatThrownBy(() -> ioClient.getMessageStatus("FISCAL_CODE", "IO-MSG-001", API_KEY))
+            .isInstanceOf(PnHttpResponseException.class)
+            .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(429));
+    }
+
+    @Test
+    void getMessageStatus_propagates_PnHttpResponseException_on500() {
+        when(mockDefaultApi.getMessage(any(), any()))
+            .thenThrow(new PnHttpResponseException("Internal Server Error", 500));
+
+        assertThatThrownBy(() -> ioClient.getMessageStatus("FISCAL_CODE", "IO-MSG-001", API_KEY))
+            .isInstanceOf(PnHttpResponseException.class)
+            .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(500));
     }
 }

@@ -52,8 +52,18 @@ public class IOClient extends BaseRestClient {
 
     public ExternalMessageResponseWithContent getMessageStatus(String fiscalCode, String ioMessageId, String apiKeyUse) {
         log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, "defaultIoApi.getMessage");
-        //TODO: utilizzare defaultIoApi
-        return null;
+        try {
+            return defaultIoApi(apiKeyUse).getMessage(fiscalCode, ioMessageId);
+        } catch (PnHttpResponseException ex) {
+            int status = ex.getStatusCode();
+            String errorCode = switch (status) {
+                case 404 -> PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_MESSAGE_NOT_FOUND;
+                case 429 -> PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_RATE_LIMIT;
+                default -> PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_SERVER_ERROR;
+            };
+            log.warn("getMessageStatus failed — status={} errorCode={}", status, errorCode);
+            throw ex;
+        }
     }
 
     public String getServiceUseKey(String serviceId) {

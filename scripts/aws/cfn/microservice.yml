@@ -221,6 +221,19 @@ Parameters:
     Type: String
     Description: 'ARN of the EventBridge bus for IO Connector outcome events'
 
+  PnIoConnectorPollingQueueName:
+    Type: String
+    Description: 'Name of SQS queue pn-io-connector-polling-queue (from storage.yml output)'
+
+  PnIoConnectorPollingQueueArn:
+    Type: String
+    Description: 'ARN of SQS queue pn-io-connector-polling-queue (from storage.yml output)'
+
+  PnIoConnectorPollingIntervalHours:
+    Type: Number
+    Default: 24
+    Description: 'Default polling max window in hours (used when pollingMaxDate is not set in the send request); polling interval = clamp(window/4, 15min, 6h)'
+
   PnIoConnectorIoConfigurationId:
     Type: String
     Description: 'IO Remote configuration for attachments download'
@@ -294,7 +307,9 @@ Resources:
         ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
         ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
         ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${PnIoConnectorEventBridgeBusName}'
-        ContainerEnvEntry12: !Sub 'PN_IO_CONNECTOR_IO_CONFIGURATION_ID=${PnIoConnectorIoConfigurationId}'
+        ContainerEnvEntry12: !Sub 'PN_IO_CONNECTOR_SQS_POLLING_QUEUE_NAME=${PnIoConnectorPollingQueueName}'
+        ContainerEnvEntry13: !Sub 'PN_IO_CONNECTOR_POLLING_INTERVAL_HOURS=${PnIoConnectorPollingIntervalHours}'
+        ContainerEnvEntry14: !Sub 'PN_IO_CONNECTOR_IO_CONFIGURATION_ID=${PnIoConnectorIoConfigurationId}'
         MappedPaths: '/io-connector/message*,/io-connector/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
@@ -359,6 +374,15 @@ Resources:
               - 'events:PutEvents'
             Resource:
               - !Ref PnIoConnectorEventBridgeBusArn
+          - Effect: Allow
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:SendMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+            Resource: !Ref PnIoConnectorPollingQueueArn
 
   PnIoConnectorIoApi:
     Type: AWS::CloudFormation::Stack

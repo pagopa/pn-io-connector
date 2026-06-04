@@ -178,6 +178,9 @@
                                 <openApiNullable>false</openApiNullable>
                                 <additionalModelTypeAnnotations>@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)</additionalModelTypeAnnotations>
                             </configOptions>
+                            <importMappings>
+                                <importMapping>MessageStatusValue=it.pagopa.pn.ioconnector.model.io.MessageStatusValue</importMapping>
+                            </importMappings>
                         </configuration>
                     </execution>
                     <execution>

@@ -1,6 +1,7 @@
 package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.localstack.LocalStackTestConfig;
@@ -32,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,6 +66,8 @@ class SendWorkerIntegrationTest {
     @MockitoBean
     private EventBridgeProducer eventBridgeProducer;
 
+    private final Acknowledgement acknowledgement = mock(Acknowledgement.class);
+
     private String queueUrl;
 
     @BeforeEach
@@ -87,7 +91,7 @@ class SendWorkerIntegrationTest {
         when(ioService.sendMessage(eq(request), eq("test-api-key")))
                 .thenThrow(new PnHttpResponseException("Service Unavailable", 503));
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         Optional<IOConnectorRequestEntity> updated = dao.findById("INT-RETRY-001");
         assertThat(updated).isPresent();
@@ -111,7 +115,7 @@ class SendWorkerIntegrationTest {
         when(ioService.sendMessage(eq(request), eq("test-api-key")))
                 .thenThrow(new PnHttpResponseException("Service Unavailable", 503));
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         Optional<IOConnectorRequestEntity> updated = dao.findById("INT-RETRY-002");
         assertThat(updated).isPresent();
@@ -135,7 +139,7 @@ class SendWorkerIntegrationTest {
         when(ioService.sendMessage(eq(request), eq("test-api-key")))
                 .thenThrow(new PnHttpResponseException("Service Unavailable", 503));
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         Optional<IOConnectorRequestEntity> updated = dao.findById("INT-RETRY-003");
         assertThat(updated).isPresent();
@@ -158,7 +162,7 @@ class SendWorkerIntegrationTest {
         when(ioService.sendMessage(eq(request), eq("test-api-key")))
                 .thenThrow(new PnHttpResponseException("Bad Request", 400));
 
-        assertThatThrownBy(() -> sendWorker.process(message))
+        assertThatThrownBy(() -> sendWorker.process(message, acknowledgement))
                 .isInstanceOf(PnHttpResponseException.class)
                 .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(400));
 
@@ -182,7 +186,7 @@ class SendWorkerIntegrationTest {
         when(ioService.sendMessage(eq(request), eq("test-api-key")))
                 .thenThrow(new PnHttpResponseException("Too Many Requests", 429));
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         Optional<IOConnectorRequestEntity> updated = dao.findById("INT-RETRY-005");
         assertThat(updated).isPresent();

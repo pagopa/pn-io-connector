@@ -20,6 +20,9 @@ public class DataVaultClient {
     private final RecipientsApi recipientsApi;
 
     public List<BaseRecipientDto> deanonymize(String internalId) {
+        if (internalId == null || internalId.isBlank()) {
+            throw new PnDataVaultException(400, "internalId cannot be null or blank");
+        }
         log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.PN_DATA_VAULT, "recipientsApi");
         List<String> internalIdParam = Collections.singletonList(internalId);
         try {
