@@ -1,10 +1,14 @@
 package it.pagopa.pn.ioconnector.springbootcfg;
 
+import io.awspring.cloud.sqs.config.SqsMessageListenerContainerFactory;
+import io.awspring.cloud.sqs.listener.acknowledgement.handler.AcknowledgementMode;
 import io.awspring.cloud.sqs.listener.errorhandler.AsyncErrorHandler;
 import io.awspring.cloud.sqs.listener.errorhandler.ExponentialBackoffErrorHandler;
 import it.pagopa.pn.commons.configs.RuntimeMode;
 import it.pagopa.pn.commons.configs.aws.AwsConfigs;
 import it.pagopa.pn.commons.configs.aws.AwsServicesClientsConfig;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
@@ -12,9 +16,11 @@ import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.eventbridge.EventBridgeClient;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
+import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 
 import java.net.URI;
 
+@Slf4j
 @Configuration
 public class AwsServicesClientsConfigActivation extends AwsServicesClientsConfig {
 
@@ -50,6 +56,16 @@ public class AwsServicesClientsConfigActivation extends AwsServicesClientsConfig
             builder.endpointOverride(URI.create(awsConfig.getEndpointUrl()));
         }
         return builder.build();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "defaultSqsListenerContainerFactory")
+    public SqsMessageListenerContainerFactory<Object> defaultSqsListenerContainerFactory(SqsAsyncClient sqsAsyncClient) {
+        log.info("Registered custom defaultSqsListenerContainerFactory for ack MANUAL");
+        return SqsMessageListenerContainerFactory.builder()
+                .configure(options -> options.acknowledgementMode(AcknowledgementMode.MANUAL))
+                .sqsAsyncClient(sqsAsyncClient)
+                .build();
     }
 
     @Bean

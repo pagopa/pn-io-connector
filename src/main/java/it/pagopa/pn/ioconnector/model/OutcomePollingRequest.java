@@ -24,4 +24,5 @@ public class OutcomePollingRequest {
     private Instant pollingMaxDate;
     private long pollingIntervalSeconds;
     private int attemptCount;
+    private Long enqueuedAt;
 }

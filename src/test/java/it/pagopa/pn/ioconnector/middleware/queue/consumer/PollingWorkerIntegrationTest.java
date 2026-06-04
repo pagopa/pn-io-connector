@@ -1,6 +1,7 @@
 package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.localstack.LocalStackTestConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
@@ -28,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,6 +59,8 @@ class PollingWorkerIntegrationTest {
     @MockitoBean
     private EventBridgeProducer eventBridgeProducer;
 
+    private final Acknowledgement acknowledgement = mock(Acknowledgement.class);
+
     private String queueUrl;
 
     @BeforeEach
@@ -74,7 +78,7 @@ class PollingWorkerIntegrationTest {
         when(ioService.getServiceUseKey(anyString())).thenReturn("test-api-key");
         when(ioService.getMessageStatus(any(), any(), any(), any(), any())).thenReturn(null);
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         ReceiveMessageResponse queued = sqsClient.receiveMessage(r -> r
                 .queueUrl(queueUrl)
@@ -103,7 +107,7 @@ class PollingWorkerIntegrationTest {
         when(ioService.getMessageStatus(any(), any(), any(), any(), any()))
                 .thenReturn(OutcomeEvent.builder().eventType(EventType.READ).build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         Optional<IOConnectorRequestEntity> updated = dao.findById("INT-POLL-002");
         assertThat(updated).isPresent();
@@ -133,7 +137,7 @@ class PollingWorkerIntegrationTest {
         when(ioService.getMessageStatus(any(), any(), any(), any(), any()))
                 .thenReturn(OutcomeEvent.builder().eventType(EventType.PAID).build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         Optional<IOConnectorRequestEntity> updated = dao.findById("INT-POLL-003");
         assertThat(updated).isPresent();
@@ -161,7 +165,7 @@ class PollingWorkerIntegrationTest {
         when(ioService.getMessageStatus(any(), any(), any(), any(), any()))
                 .thenReturn(OutcomeEvent.builder().eventType(EventType.DELIVERED_TO_USER).build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         Optional<IOConnectorRequestEntity> updated = dao.findById("INT-POLL-004");
         assertThat(updated).isPresent();

@@ -3,6 +3,7 @@ package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.annotation.SqsListener;
+import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
@@ -48,7 +49,7 @@ public class SendWorker {
     private final ObjectMapper objectMapper;
 
     @SqsListener(value = "${pn.io-connector.sqs-send-queue-name}")
-    public void process(Message<MessageSendRequest> message) {
+    public void process(Message<MessageSendRequest> message, Acknowledgement acknowledgement) {
         MessageSendRequest request = message.getPayload();
         String receiptHandle = (String) message.getHeaders().get("Sqs_ReceiptHandle");
 
@@ -56,6 +57,7 @@ public class SendWorker {
 
         if (!isAttachmentFormatValid(request)) {
             handleInvalidAttachmentFormat(request);
+            acknowledgement.acknowledge();
             return;
         }
 
@@ -66,6 +68,7 @@ public class SendWorker {
 
             if (!Boolean.TRUE.equals(profile.getSenderAllowed())) {
                 handleSenderNotAllowed(request);
+                acknowledgement.acknowledge();
                 return;
             }
             MessageSendRequest requestToSend = message.getPayload();
@@ -82,6 +85,7 @@ public class SendWorker {
             List<Integer> policy = config.getSendRetryPolicy();
             if (currentStep >= policy.size()) {
                 handleRetryExhausted(request);
+                acknowledgement.acknowledge();
                 return;
             }
 
@@ -100,6 +104,7 @@ public class SendWorker {
                     .retryStep(currentStep + 1)
                     .lastRetryTimestamp(Instant.now().toString())
                     .build());
+            // Non ack: il messaggio rimane in flight e torna visibile dopo il visibility timeout
             return;
         }
 
@@ -122,6 +127,7 @@ public class SendWorker {
         }
 
         publishPollingRequest(request, ioMessageId);
+        acknowledgement.acknowledge();
     }
 
     private void publishPollingRequest(MessageSendRequest request, String ioMessageId) {
@@ -144,6 +150,7 @@ public class SendWorker {
                 .pollingMaxDate(pollingMaxDate)
                 .pollingIntervalSeconds(pollingIntervalSeconds)
                 .attemptCount(0)
+                .enqueuedAt(now.toEpochMilli())
                 .build();
 
         try {
