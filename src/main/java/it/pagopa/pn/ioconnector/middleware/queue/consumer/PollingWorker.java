@@ -3,6 +3,7 @@ package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.annotation.SqsListener;
+import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
@@ -41,7 +42,7 @@ public class PollingWorker {
     private final ObjectMapper objectMapper;
 
     @SqsListener(value = "${pn.io-connector.sqs-polling-queue-name}")
-    public void process(Message<OutcomePollingRequest> message) {
+    public void process(Message<OutcomePollingRequest> message, Acknowledgement acknowledgement) {
         OutcomePollingRequest request = message.getPayload();
         String receiptHandle = (String) message.getHeaders().get("Sqs_ReceiptHandle");
         Instant now = Instant.now();
@@ -59,6 +60,7 @@ public class PollingWorker {
                 int effectiveWait = (int) Math.min(Math.min(remainingInterval, remainingToExpiry), 43200);
                 if (effectiveWait > 0) {
                     changePollingQueueVisibility(receiptHandle, effectiveWait);
+                    // Non ack: il messaggio rimane in flight e torna visibile dopo il visibility timeout
                     return;
                 }
             }
@@ -67,6 +69,7 @@ public class PollingWorker {
         if (request.getPollingMaxDate() != null && now.isAfter(request.getPollingMaxDate())) {
             log.warn("Polling exhausted requestId={} lastKnownStatus={} iun={}",
                     request.getRequestId(), request.getLastKnownStatus(), request.getIun());
+            acknowledgement.acknowledge();
             return;
         }
 
@@ -76,6 +79,7 @@ public class PollingWorker {
 
         if (statusResponse == null || statusResponse.getEventType() == request.getLastKnownStatus()) {
             reEnqueue(request, request.getLastKnownStatus());
+            acknowledgement.acknowledge();
             return;
         }
 
@@ -106,10 +110,12 @@ public class PollingWorker {
                 .build());
 
         if (isFinalState(newStatus, request.isPaymentData())) {
+            acknowledgement.acknowledge();
             return;
         }
 
         reEnqueue(request, newStatus);
+        acknowledgement.acknowledge();
     }
 
     private boolean isFinalState(EventType status, boolean hasPaymentData) {

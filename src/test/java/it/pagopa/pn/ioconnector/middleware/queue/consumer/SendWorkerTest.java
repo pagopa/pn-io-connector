@@ -3,6 +3,7 @@ package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
@@ -53,6 +54,7 @@ class SendWorkerTest {
     @Mock private EventBridgeProducer eventBridgeProducer;
     @Mock private SqsClient sqsClient;
     @Mock private PnIoConnectorConfig config;
+    @Mock private Acknowledgement acknowledgement;
     @Spy  private ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -69,7 +71,7 @@ class SendWorkerTest {
         profile.setSenderAllowed(false);
         when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
@@ -82,6 +84,7 @@ class SendWorkerTest {
         assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.SENDER_NOT_ALLOWED);
 
         verify(ioService, never()).sendMessage(any(), any());
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -99,7 +102,7 @@ class SendWorkerTest {
                 .thenReturn(GetQueueUrlResponse.builder().queueUrl("https://sqs/polling-queue").build());
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
@@ -119,6 +122,7 @@ class SendWorkerTest {
         assertThat(pollingRequest.getLastKnownStatus()).isEqualTo(EventType.SENT_TO_IO);
         assertThat(pollingRequest.getAttemptCount()).isEqualTo(0);
         assertThat(pollingRequest.getSenderServiceId()).isEqualTo("SVC-001");
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -133,12 +137,13 @@ class SendWorkerTest {
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new RuntimeException("IO 500"));
 
-        assertThatThrownBy(() -> sendWorker.process(message))
+        assertThatThrownBy(() -> sendWorker.process(message, acknowledgement))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("IO 500");
 
         verify(dao, never()).update(any());
         verify(eventBridgeProducer, never()).publish(any());
+        verify(acknowledgement, never()).acknowledge();
     }
 
     @Test
@@ -162,7 +167,7 @@ class SendWorkerTest {
                 .thenReturn(GetQueueUrlResponse.builder().queueUrl("https://sqs/polling-queue").build());
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
         verify(sqsClient).sendMessage(sqsCaptor.capture());
@@ -170,6 +175,7 @@ class SendWorkerTest {
                 sqsCaptor.getValue().messageBody(), OutcomePollingRequest.class);
         assertThat(pollingRequest.isPaymentData()).isTrue();
         assertThat(pollingRequest.getSenderServiceId()).isEqualTo("SVC-001");
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -197,7 +203,7 @@ class SendWorkerTest {
                         .queueUrl("https://sqs.us-east-1.amazonaws.com/123456789/pn-io-connector-send-queue")
                         .build());
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<ChangeMessageVisibilityRequest> visibilityCaptor =
                 ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
@@ -210,6 +216,7 @@ class SendWorkerTest {
         assertThat(entityCaptor.getValue().getLastRetryTimestamp()).isNotNull();
 
         verify(eventBridgeProducer, never()).publish(any());
+        verify(acknowledgement, never()).acknowledge();
     }
 
     @Test
@@ -232,7 +239,7 @@ class SendWorkerTest {
         when(dao.findById(request.getRequestId())).thenReturn(Optional.of(entity));
         when(config.getSendRetryPolicy()).thenReturn(List.of(5, 10, 20, 40));
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
@@ -240,6 +247,7 @@ class SendWorkerTest {
 
         verify(eventBridgeProducer, never()).publish(any());
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -267,7 +275,7 @@ class SendWorkerTest {
                         .queueUrl("https://sqs.us-east-1.amazonaws.com/123456789/pn-io-connector-send-queue")
                         .build());
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<ChangeMessageVisibilityRequest> visibilityCaptor =
                 ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
@@ -277,6 +285,7 @@ class SendWorkerTest {
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(2);
+        verify(acknowledgement, never()).acknowledge();
     }
 
     @Test
@@ -292,13 +301,14 @@ class SendWorkerTest {
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new PnHttpResponseException("Not Found", 404));
 
-        assertThatThrownBy(() -> sendWorker.process(message))
+        assertThatThrownBy(() -> sendWorker.process(message, acknowledgement))
                 .isInstanceOf(PnHttpResponseException.class)
                 .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(404));
 
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
         verify(dao, never()).update(any());
         verify(eventBridgeProducer, never()).publish(any());
+        verify(acknowledgement, never()).acknowledge();
     }
 
     @Test
@@ -323,7 +333,7 @@ class SendWorkerTest {
                         .queueUrl("https://sqs.us-east-1.amazonaws.com/123456789/pn-io-connector-send-queue")
                         .build());
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<ChangeMessageVisibilityRequest> visibilityCaptor =
                 ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
@@ -335,6 +345,7 @@ class SendWorkerTest {
         assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(1);
 
         verify(eventBridgeProducer, never()).publish(any());
+        verify(acknowledgement, never()).acknowledge();
     }
 
     @Test
@@ -347,12 +358,13 @@ class SendWorkerTest {
         profile.setSenderAllowed(null);
         when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.SENDER_NOT_ALLOWED.name());
         verify(ioService, never()).sendMessage(any(), any());
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -376,7 +388,7 @@ class SendWorkerTest {
                         .queueUrl("https://sqs.us-east-1.amazonaws.com/123456789/pn-io-connector-send-queue")
                         .build());
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<ChangeMessageVisibilityRequest> visibilityCaptor =
                 ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
@@ -388,6 +400,7 @@ class SendWorkerTest {
         assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(1);
 
         verify(eventBridgeProducer, never()).publish(any());
+        verify(acknowledgement, never()).acknowledge();
     }
 
     @Test
@@ -399,7 +412,7 @@ class SendWorkerTest {
         Message<MessageSendRequest> message = buildMessage(request);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
@@ -416,6 +429,7 @@ class SendWorkerTest {
         }
 
         verify(ioService, never()).sendMessage(any(), any());
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -427,13 +441,14 @@ class SendWorkerTest {
         Message<MessageSendRequest> message = buildMessage(request);
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
 
-        sendWorker.process(message);
+        sendWorker.process(message, acknowledgement);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.ATTACHMENTS_VALIDATION_FAILED.name());
 
         verify(ioService, never()).sendMessage(any(), any());
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -445,12 +460,13 @@ class SendWorkerTest {
         when(dataVaultService.deanonymize(TOKEN_TAX_ID))
                 .thenThrow(new PnDataVaultException(400, "Bad Request"));
 
-        assertThatThrownBy(() -> sendWorker.process(message))
+        assertThatThrownBy(() -> sendWorker.process(message, acknowledgement))
                 .isInstanceOf(PnDataVaultException.class);
 
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
         verify(dao, never()).update(any());
         verify(eventBridgeProducer, never()).publish(any());
+        verify(acknowledgement, never()).acknowledge();
     }
 
     private static final String TOKEN_TAX_ID = "PF-abc123";

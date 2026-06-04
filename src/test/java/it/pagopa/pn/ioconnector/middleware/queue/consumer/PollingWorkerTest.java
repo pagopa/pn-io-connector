@@ -3,6 +3,7 @@ package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
@@ -45,6 +46,7 @@ class PollingWorkerTest {
     @Mock private EventBridgeProducer eventBridgeProducer;
     @Mock private SqsClient sqsClient;
     @Mock private PnIoConnectorConfig config;
+    @Mock private Acknowledgement acknowledgement;
     @Spy  private ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -58,7 +60,7 @@ class PollingWorkerTest {
 
         mockQueueUrl();
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         ArgumentCaptor<ChangeMessageVisibilityRequest> captor =
                 ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
@@ -67,6 +69,7 @@ class PollingWorkerTest {
 
         verify(ioService, never()).getMessageStatus(any(), any(), any(), any(), any());
         verify(sqsClient, never()).sendMessage(any(SendMessageRequest.class));
+        verify(acknowledgement, never()).acknowledge();
     }
 
     @Test
@@ -77,12 +80,13 @@ class PollingWorkerTest {
 
         mockQueueUrl();
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         ArgumentCaptor<ChangeMessageVisibilityRequest> captor =
                 ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
         verify(sqsClient).changeMessageVisibility(captor.capture());
         assertThat(captor.getValue().visibilityTimeout()).isBetween(55, 65);
+        verify(acknowledgement, never()).acknowledge();
     }
 
     @Test
@@ -92,12 +96,13 @@ class PollingWorkerTest {
 
         mockQueueUrl();
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         ArgumentCaptor<ChangeMessageVisibilityRequest> captor =
                 ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
         verify(sqsClient).changeMessageVisibility(captor.capture());
         assertThat(captor.getValue().visibilityTimeout()).isEqualTo(43200);
+        verify(acknowledgement, never()).acknowledge();
     }
 
     @Test
@@ -111,10 +116,11 @@ class PollingWorkerTest {
         mockQueueUrl();
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
         verify(ioService).getMessageStatus(any(), any(), any(), any(), any());
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -123,13 +129,14 @@ class PollingWorkerTest {
                 Instant.now().minusSeconds(10));
         Message<OutcomePollingRequest> message = buildMessage(request, 0);
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         verify(ioService, never()).getServiceUseKey(any());
         verify(ioService, never()).getMessageStatus(any(), any(), any(), any(), any());
         verify(dao, never()).update(any());
         verify(eventBridgeProducer, never()).publish(any());
         verify(sqsClient, never()).sendMessage(any(SendMessageRequest.class));
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -142,11 +149,12 @@ class PollingWorkerTest {
         mockQueueUrl();
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         verify(sqsClient).sendMessage(any(SendMessageRequest.class));
         verify(eventBridgeProducer, never()).publish(any());
         verify(dao, never()).update(any());
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -160,11 +168,12 @@ class PollingWorkerTest {
         mockQueueUrl();
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         verify(sqsClient).sendMessage(any(SendMessageRequest.class));
         verify(eventBridgeProducer, never()).publish(any());
         verify(dao, never()).update(any());
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -179,7 +188,7 @@ class PollingWorkerTest {
         mockQueueUrl();
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         ArgumentCaptor<OutcomeEvent> eventCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
         verify(eventBridgeProducer).publish(eventCaptor.capture());
@@ -190,6 +199,7 @@ class PollingWorkerTest {
         assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.DELIVERED_TO_USER.name());
 
         verify(sqsClient).sendMessage(any(SendMessageRequest.class));
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -202,11 +212,12 @@ class PollingWorkerTest {
                 .thenReturn(OutcomeEvent.builder().eventType(EventType.READ).build());
         when(dao.findByIdConsistentRead(request.getRequestId())).thenReturn(Optional.empty());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         verify(eventBridgeProducer).publish(any());
         verify(dao).update(any());
         verify(sqsClient, never()).sendMessage(any(SendMessageRequest.class));
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -221,11 +232,12 @@ class PollingWorkerTest {
         mockQueueUrl();
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         verify(eventBridgeProducer).publish(any());
         verify(dao).update(any());
         verify(sqsClient).sendMessage(any(SendMessageRequest.class));
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -238,11 +250,12 @@ class PollingWorkerTest {
                 .thenReturn(OutcomeEvent.builder().eventType(EventType.PAID).build());
         when(dao.findByIdConsistentRead(request.getRequestId())).thenReturn(Optional.empty());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         verify(eventBridgeProducer).publish(any());
         verify(dao).update(any());
         verify(sqsClient, never()).sendMessage(any(SendMessageRequest.class));
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -258,7 +271,7 @@ class PollingWorkerTest {
         mockQueueUrl();
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
         verify(sqsClient).sendMessage(sqsCaptor.capture());
@@ -266,6 +279,7 @@ class PollingWorkerTest {
                 sqsCaptor.getValue().messageBody(), OutcomePollingRequest.class);
         assertThat(requeued.getAttemptCount()).isEqualTo(3);
         assertThat(requeued.getLastKnownStatus()).isEqualTo(EventType.DELIVERED_TO_USER);
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -290,13 +304,14 @@ class PollingWorkerTest {
         mockQueueUrl();
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getEventList()).hasSize(2);
         assertThat(entityCaptor.getValue().getEventList().get(0).getStatus()).isEqualTo(EventType.SENT_TO_IO.name());
         assertThat(entityCaptor.getValue().getEventList().get(1).getStatus()).isEqualTo(EventType.DELIVERED_TO_USER.name());
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -311,12 +326,13 @@ class PollingWorkerTest {
         mockQueueUrl();
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
-        pollingWorker.process(message);
+        pollingWorker.process(message, acknowledgement);
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
         assertThat(entityCaptor.getValue().getEventList().get(0).getStatus()).isEqualTo(EventType.DELIVERED_TO_USER.name());
+        verify(acknowledgement).acknowledge();
     }
 
     private void mockQueueUrl() {
