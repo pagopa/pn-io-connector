@@ -19,10 +19,10 @@ exports.handleEvent = async function (event) {
     return responseBuilder.error(400, 'Bad Request', 'Missing required path parameters: requestId / fileKey');
   }
 
-  const recipientTaxId = event?.headers?.["x-pagopa-cx-taxid"];
+  const recipientTaxId = event?.headers?.["x-pagopa-pn-cx-id"];
 
   if (!recipientTaxId) {
-    return responseBuilder.error(403, 'Forbidden', 'Missing \'x-pagopa-cx-taxid\' header');
+    return responseBuilder.error(403, 'Forbidden', 'Missing \'x-pagopa-pn-cx-id\' header');
   }
 
   let entity;

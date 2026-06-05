@@ -13,7 +13,7 @@ function makeEvent(correlationId, fileKey, taxId) {
   return {
     pathParameters: { id: correlationId, url: fileKey },
     headers: {
-      'x-pagopa-cx-taxid': taxId !== undefined ? taxId : FISCAL_CODE
+      'x-pagopa-pn-cx-id': taxId !== undefined ? taxId : FISCAL_CODE
     }
   };
 }
@@ -50,7 +50,7 @@ describe('eventHandler', () => {
   });
 
   describe('403 cases', () => {
-    it('should return 403 when x-pagopa-cx-taxid header is absent', async () => {
+    it('should return 403 when x-pagopa-pn-cx-id header is absent', async () => {
       const handler = makeHandler();
       const event = { pathParameters: { id: CORRELATION_ID, url: FILE_KEY }, headers: {} };
       const result = await handler.handleEvent(event);

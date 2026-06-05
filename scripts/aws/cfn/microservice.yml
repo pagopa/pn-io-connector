@@ -244,6 +244,11 @@ Parameters:
     Default: http
     AllowedValues: [ http, https ]
 
+  SafeStorageHostname:
+    Type: String
+    Default: 'alb.confidential.pn.internal'
+    Description: 'Hostname of the SafeStorage'
+
   SafeStoragePort:
     Type: String
     Default: '8080'
@@ -444,7 +449,7 @@ Resources:
           DOWNLOAD_MODE_REDIRECT: !Ref DownloadModeRedirect
           REQUESTS_TABLE_NAME: !Ref PnIoConnectorRequestsTableName
           PN_SAFESTORAGE_PROTOCOL: !Ref SafeStorageProtocol
-          PN_SAFESTORAGE_HOSTNAME: !Sub '${ApplicationLoadBalancerDomain}'
+          PN_SAFESTORAGE_HOSTNAME: !Ref SafeStorageHostname
           PN_SAFESTORAGE_PORT: !Ref SafeStoragePort
           PN_SAFESTORAGE_GET_FILE_PATH: !Ref SafeStorageGetFilePath
           PN_SAFESTORAGE_API_KEY: !Ref SafeStorageApiKey
