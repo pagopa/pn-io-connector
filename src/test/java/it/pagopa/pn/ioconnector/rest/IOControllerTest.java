@@ -207,7 +207,7 @@ class IOControllerTest {
                 .thenReturn(response);
 
         mockMvc.perform(get("/io-connector/messages/{id}", "test-request-id")
-                .header("x-pagopa-cx-taxid", "FISCALCODE12345X"))
+                .header("x-pagopa-pn-cx-id", "FISCALCODE12345X"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.details.subject").value("Oggetto notifica"))
                 .andExpect(jsonPath("$.details.markdown").value("Testo notifica"));
@@ -219,7 +219,7 @@ class IOControllerTest {
                 .thenThrow(new PnIoGetMessageNotFoundException("test-request-id"));
 
         mockMvc.perform(get("/io-connector/messages/{id}", "test-request-id")
-                .header("x-pagopa-cx-taxid", "DIFFERENT_CODE_X"))
+                .header("x-pagopa-pn-cx-id", "DIFFERENT_CODE_X"))
                 .andExpect(status().isNotFound());
     }
 
@@ -229,7 +229,7 @@ class IOControllerTest {
                 .thenThrow(new PnIoGetMessageNotFoundException("test-request-id"));
 
         mockMvc.perform(get("/io-connector/messages/{id}", "test-request-id")
-                .header("x-pagopa-cx-taxid", "FISCALCODE12345X"))
+                .header("x-pagopa-pn-cx-id", "FISCALCODE12345X"))
                 .andExpect(status().isNotFound());
     }
 

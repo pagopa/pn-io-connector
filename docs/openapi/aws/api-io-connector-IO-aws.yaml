@@ -2,7 +2,7 @@ openapi: 3.0.1
 info:
   title: >-
     ${stageVariables.ProjectName}-${stageVariables.MicroServiceUniqueName}-${stageVariables.IntendedUsage}
-  version: 1.0.0
+  version: TdWM64eyvoiXW/6/ZJP+pnHZ6dEtkX61pC4JC+9+ZFM=
 servers:
   - url: https://${stageVariables.DnsName}/{basePath}
     variables:
@@ -11,7 +11,7 @@ servers:
     x-amazon-apigateway-endpoint-configuration:
       disableExecuteApiEndpoint: true
 paths:
-  /io-connector/messages/{id}:
+  /messages/{id}:
     get:
       summary: Recupero metadati allegati di un messaggio
       operationId: getMessage
@@ -39,28 +39,54 @@ paths:
               schema:
                 $ref: '#/components/schemas/GetMessageResponse'
         '404':
-          description: Messaggio non trovato (richiesta inesistente o codice fiscale del chiamante non coerente con il destinatario).
+          description: >-
+            Messaggio non trovato (richiesta inesistente o codice fiscale del
+            chiamante non coerente con il destinatario).
         '500':
           description: Errore interno.
       security:
         - pn-auth-fleet_LollipopAuthorizer_openapi: []
-      x-amazon-apigateway-request-validator: params-only
+        - api_key_openapi: []
       x-amazon-apigateway-integration:
         uri: >-
           http://${stageVariables.ApplicationLoadBalancerDomain}:8080/${stageVariables.ServiceApiPath}/messages/{id}
         connectionId: ${stageVariables.NetworkLoadBalancerLink}
-        httpMethod: GET
+        httpMethod: ANY
         requestParameters:
+          integration.request.header.x-pagopa-pn-cx-id: context.authorizer.cx_id
+          integration.request.header.x-pagopa-pn-cx-role: context.authorizer.cx_role
+          integration.request.header.x-pagopa-pn-uid: context.authorizer.uid
+          integration.request.header.x-pagopa-pn-jti: context.authorizer.cx_jti
+          integration.request.header.x-pagopa-pn-cx-type: context.authorizer.cx_type
+          integration.request.header.x-pagopa-pn-cx-groups: context.authorizer.cx_groups
+          integration.request.header.x-pagopa-pn-src-ch-details: context.authorizer.sourceChannelDetails
+          integration.request.header.x-pagopa-pn-src-ch: '''IO'''
+          integration.request.header.x-pagopa-pn-name: context.authorizer.name
+          integration.request.header.x-pagopa-pn-family-name: context.authorizer.familyName
+          integration.request.header.x-pagopa-pn-result-code: context.authorizer.resultCode
           integration.request.path.id: method.request.path.id
-          integration.request.header.x-pagopa-cx-taxid: context.authorizer.cx_id
         passthroughBehavior: when_no_match
         connectionType: VPC_LINK
         timeoutInMillis: 29000
         type: http_proxy
-  /io-connector/messages/{id}/{url}:
+    options:
+      operationId: Options for /messages/{id} API CORS
+      x-amazon-apigateway-integration:
+        uri: >-
+          http://${stageVariables.ApplicationLoadBalancerDomain}:8080/${stageVariables.ServiceApiPath}/messages/{id}
+        connectionId: ${stageVariables.NetworkLoadBalancerLink}
+        httpMethod: ANY
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+        connectionType: VPC_LINK
+        timeoutInMillis: 29000
+        type: http_proxy
+  /messages/{id}/{url}:
     get:
       summary: Download allegato di un messaggio
       operationId: getAttachment
+      x-pagopa-lambda-name: pn-download-attachments
       parameters:
         - name: id
           in: path
@@ -95,20 +121,32 @@ paths:
                 type: string
                 format: uri
         '404':
-          description: Messaggio o allegato non trovato (richiesta inesistente o codice fiscale del chiamante non coerente con il destinatario).
+          description: >-
+            Messaggio o allegato non trovato (richiesta inesistente o codice
+            fiscale del chiamante non coerente con il destinatario).
         '500':
           description: Errore interno.
       security:
         - pn-auth-fleet_LollipopAuthorizer_openapi: []
-      x-amazon-apigateway-request-validator: params-only
+        - api_key_openapi: []
       x-amazon-apigateway-integration:
         uri: >-
           arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:pn-download-attachments/invocations
         httpMethod: POST
         requestParameters:
+          integration.request.header.x-pagopa-pn-cx-id: context.authorizer.cx_id
+          integration.request.header.x-pagopa-pn-cx-role: context.authorizer.cx_role
+          integration.request.header.x-pagopa-pn-uid: context.authorizer.uid
+          integration.request.header.x-pagopa-pn-jti: context.authorizer.cx_jti
+          integration.request.header.x-pagopa-pn-cx-type: context.authorizer.cx_type
+          integration.request.header.x-pagopa-pn-cx-groups: context.authorizer.cx_groups
+          integration.request.header.x-pagopa-pn-src-ch-details: context.authorizer.sourceChannelDetails
+          integration.request.header.x-pagopa-pn-src-ch: '''IO'''
+          integration.request.header.x-pagopa-pn-name: context.authorizer.name
+          integration.request.header.x-pagopa-pn-family-name: context.authorizer.familyName
+          integration.request.header.x-pagopa-pn-result-code: context.authorizer.resultCode
           integration.request.path.id: method.request.path.id
           integration.request.path.url: method.request.path.url
-          integration.request.header.x-pagopa-cx-taxid: context.authorizer.cx_id
         passthroughBehavior: when_no_match
         contentHandling: CONVERT_TO_TEXT
         timeoutInMillis: 29000
@@ -125,14 +163,22 @@ components:
         maxLength: 16
         pattern: >-
           ^[A-Z]{6}[0-9LMNPQRSTUV]{2}[A-Z]{1}[0-9LMNPQRSTUV]{2}[A-Z]{1}[0-9LMNPQRSTUV]{3}[A-Z]{1}$
-      description: Codice fiscale del destinatario inviato da Backend IO (identitySource per il LollipopAuthorizer; sostituito nell'integrazione con l'internalId via context.authorizer.cx_id)
+      description: >-
+        Codice fiscale del destinatario inviato da Backend IO (identitySource
+        per il LollipopAuthorizer; sostituito nell'integrazione con l'internalId
+        via context.authorizer.cx_id)
     lollipopOriginalMethod:
       name: x-pagopa-lollipop-original-method
       in: header
       required: false
       schema:
         type: string
-        enum: [GET, POST, PUT, DELETE, PATCH]
+        enum:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - PATCH
     lollipopOriginalUrl:
       name: x-pagopa-lollipop-original-url
       in: header
@@ -158,7 +204,9 @@ components:
       required: false
       schema:
         type: string
-        enum: [SAML, OIDC]
+        enum:
+          - SAML
+          - OIDC
     lollipopAuthJwt:
       name: x-pagopa-lollipop-auth-jwt
       in: header
@@ -188,6 +236,7 @@ components:
   schemas:
     GetMessageResponse:
       type: object
+      description: Dettagli del messaggio e lista degli allegati esposti a BackEnd IO.
       properties:
         details:
           type: object
@@ -215,7 +264,12 @@ components:
               category:
                 type: string
                 default: DOCUMENT
+  responses: {}
   securitySchemes:
+    api_key_openapi:
+      type: apiKey
+      name: x-api-key
+      in: header
     pn-auth-fleet_LollipopAuthorizer_openapi:
       type: apiKey
       name: x-pagopa-lollipop-auth-jwt
@@ -229,8 +283,9 @@ components:
           method.request.header.x-pagopa-lollipop-auth-jwt,
           method.request.header.x-pagopa-cx-taxid
         type: request
-x-amazon-apigateway-binary-media-types:
-  - application/pdf
+tags:
+  - name: IoConnector
+    description: Operazioni verso App IO
 x-amazon-apigateway-gateway-responses:
   DEFAULT_5XX:
     responseParameters:
@@ -246,8 +301,21 @@ x-amazon-apigateway-gateway-responses:
         {"status": 400, "title": "VALIDATION ERROR", "traceId":
         "$context.xrayTraceId", "errors": [ { "code": "PN_INVALID_PARAMETERS",
         "detail": "Validation errors: $context.error.validationErrorString" } ]}
+  BAD_REQUEST_BODY:
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+    responseTemplates:
+      application/json: >-
+        {"status": 400, "title": "VALIDATION ERROR", "traceId":
+        "$context.xrayTraceId", "errors": [ { "code": "PN_INVALID_BODY",
+        "detail": "Validation errors: $context.error.validationErrorString" } ]}
 x-amazon-apigateway-request-validators:
+  basic:
+    validateRequestBody: true
+    validateRequestParameters: true
   params-only:
     validateRequestBody: false
     validateRequestParameters: true
-x-amazon-apigateway-request-validator: params-only
+x-amazon-apigateway-request-validator: basic
+x-amazon-apigateway-binary-media-types:
+  - application/pdf

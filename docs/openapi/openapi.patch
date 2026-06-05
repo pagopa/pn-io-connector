@@ -1,0 +1,9 @@
+--- a/docs/openapi/aws/api-io-connector-IO-aws.yaml
++++ b/docs/openapi/aws/api-io-connector-IO-aws.yaml
+@@ -315,4 +315,6 @@
+   params-only:
+     validateRequestBody: false
+     validateRequestParameters: true
+ x-amazon-apigateway-request-validator: basic
++x-amazon-apigateway-binary-media-types:
++  - application/pdf

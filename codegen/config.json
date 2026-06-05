@@ -1,0 +1,10 @@
+{
+    "openapi": [
+        {
+            "intendedUsage": "IOL",
+            "servicePath": "io-connector",
+            "openapiFiles": ["pn-io-connector-io-internal.yaml"]
+        }
+    ],
+    "bundlePatch": "openapi.patch"
+}
