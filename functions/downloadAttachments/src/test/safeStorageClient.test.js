@@ -3,12 +3,11 @@
 const { expect } = require('chai');
 const proxyquire = require('proxyquire').noCallThru();
 
-process.env.PN_SAFESTORAGE_PROTOCOL = 'http';
-process.env.PN_SAFESTORAGE_HOSTNAME = 'safestorage.test';
-process.env.PN_SAFESTORAGE_PORT = '8082';
+process.env.PN_SAFESTORAGE_BASE_URL = 'http://safestorage.test:8082';
 process.env.PN_SAFESTORAGE_GET_FILE_PATH = '/safestorage/internal/v1/files';
 process.env.PN_SAFESTORAGE_CX_ID = 'pn-io-connector';
 process.env.PN_SAFESTORAGE_PRESIGNED_URL = 'download.url';
+process.env._X_AMZN_TRACE_ID = 'Root=1-test-traceid';
 
 const FILE_KEY = 'safestorage-key-xyz';
 const PRESIGNED_URI = 'https://s3.example.com/presigned?token=xyz';
@@ -73,7 +72,7 @@ describe('safeStorageClient', () => {
     }
   });
 
-  it('should pass cx-id and Content-Type headers in the request', async () => {
+  it('should pass cx-id, Content-Type and X-Amzn-Trace-Id headers in the request', async () => {
     let capturedOptions;
     const httpMock = {
       request: (options, callback) => {
@@ -94,6 +93,7 @@ describe('safeStorageClient', () => {
     const client = makeClient(httpMock);
     await client.getPresignedUri(FILE_KEY);
     expect(capturedOptions.headers['x-pagopa-safestorage-cx-id']).to.equal('pn-io-connector');
+    expect(capturedOptions.headers['X-Amzn-Trace-Id']).to.equal('Root=1-test-traceid');
     expect(capturedOptions.path).to.include(FILE_KEY);
   });
 });

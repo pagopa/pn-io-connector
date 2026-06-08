@@ -239,19 +239,10 @@ Parameters:
     Description: 'IO Remote configuration for attachments download'
 
   # -- Lambda downloadAttachment params ----------------------------------------------
-  SafeStorageProtocol:
+  SandboxSafeStorageBaseUrl:
     Type: String
-    Default: http
-    AllowedValues: [ http, https ]
-
-  SafeStorageHostname:
-    Type: String
-    Default: 'alb.confidential.pn.internal'
-    Description: 'Hostname of the SafeStorage'
-
-  SafeStoragePort:
-    Type: String
-    Default: '8080'
+    Default: 'http://alb.confidential.pn.internal:8080'
+    Description: 'Base URL of the SafeStorage microservice'
 
   SafeStorageGetFilePath:
     Type: String
@@ -260,10 +251,6 @@ Parameters:
   SafeStorageCxId:
     Type: String
     Default: pn-io-connector
-
-  SafeStorageApiKey:
-    Type: String
-    Default: pn-io-connector_api_key
 
   SafeStoragePresignedUrlField:
     Type: String
@@ -275,6 +262,14 @@ Parameters:
     Default: 'false'
     AllowedValues: [ 'true', 'false' ]
     Description: 'true returns 302 Location; false returns the PDF binary'
+
+  SubnetsIds:
+    Type: CommaDelimitedList
+    Description: 'subnets ids comma separated list. Where to deploy the microservice'
+
+  DownloadAttachmentsLambdaTimeout:
+    Type: Number
+    Default: 10
 
 Resources:
   PnIoConnectorMicroservice:
@@ -424,13 +419,13 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-download-attachments'
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Role: !GetAtt DownloadAttachmentsLambdaRole.Arn
       Code:
         S3Bucket: !Ref MicroserviceBucketName
         S3Key: !Sub '${MicroserviceBucketBaseKey}/functions_zip/downloadAttachments.zip'
-      Timeout: 10
+      Timeout: !Ref DownloadAttachmentsLambdaTimeout
       LoggingConfig:
         LogGroup: !Sub '/aws/lambda/${ProjectName}-download-attachments'
       TracingConfig:
@@ -438,21 +433,15 @@ Resources:
       Layers:
         - !Sub 'arn:aws:lambda:${AWS::Region}:339249233099:layer:LambdaInsightsExtension:13'
       VpcConfig:
-        SubnetIds:
-          - !Select [ 0, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
-          - !Select [ 1, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
-          - !Select [ 2, !Split [ ',', !Ref VpcEgressSubnetsIds ] ]
+        SubnetIds: !Ref SubnetsIds
         SecurityGroupIds:
           - !GetAtt DownloadAttachmentsLambdaSecurityGroup.GroupId
       Environment:
         Variables:
           DOWNLOAD_MODE_REDIRECT: !Ref DownloadModeRedirect
           REQUESTS_TABLE_NAME: !Ref PnIoConnectorRequestsTableName
-          PN_SAFESTORAGE_PROTOCOL: !Ref SafeStorageProtocol
-          PN_SAFESTORAGE_HOSTNAME: !Ref SafeStorageHostname
-          PN_SAFESTORAGE_PORT: !Ref SafeStoragePort
+          PN_SAFESTORAGE_BASE_URL: !Ref SandboxSafeStorageBaseUrl
           PN_SAFESTORAGE_GET_FILE_PATH: !Ref SafeStorageGetFilePath
-          PN_SAFESTORAGE_API_KEY: !Ref SafeStorageApiKey
           PN_SAFESTORAGE_CX_ID: !Ref SafeStorageCxId
           PN_SAFESTORAGE_PRESIGNED_URL: !Ref SafeStoragePresignedUrlField
 

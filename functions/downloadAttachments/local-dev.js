@@ -22,7 +22,7 @@ const fiscalCode    = process.argv[4] || 'PF-12c09d1a-94de-4e0a-82e6-b7637ae49c6
 
 const event = {
   pathParameters: { id: requestId, url: fileKey },
-  headers: {'x-pagopa-cx-taxid': fiscalCode}
+  headers: {'x-pagopa-pn-cx-id': fiscalCode}
 };
 
 async function seedDynamo(fiscalCode) {
