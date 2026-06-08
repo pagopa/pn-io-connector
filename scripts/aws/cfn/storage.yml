@@ -28,6 +28,10 @@ Parameters:
     Type: String
     Description: 'Where to send Logs'
 
+  CdcKinesisSourceStreamArn:
+    Type: String
+    Description: 'Where to send CDC events'
+
   LogRetention:
     Type: Number
     Default: 14
@@ -63,6 +67,10 @@ Resources:
         Enabled: true
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
+      KinesisStreamSpecification:
+        StreamArn: !Ref CdcKinesisSourceStreamArn
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
 
   # ── SQS ───────────────────────────────────────────────────────────────────
 
