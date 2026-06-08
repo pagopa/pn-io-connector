@@ -213,14 +213,6 @@ Parameters:
     Default: 'http://alb.confidential.pn.internal:8080'
     Description: 'Base URL of pn-data-vault internal service'
 
-  PnIoConnectorEventBridgeBusName:
-    Type: String
-    Description: 'Name of the EventBridge bus for IO Connector outcome events'
-
-  PnIoConnectorEventBridgeBusArn:
-    Type: String
-    Description: 'ARN of the EventBridge bus for IO Connector outcome events'
-
   PnIoConnectorPollingQueueName:
     Type: String
     Description: 'Name of SQS queue pn-io-connector-polling-queue (from storage.yml output)'
@@ -306,7 +298,7 @@ Resources:
         ContainerEnvEntry8: !Sub 'PN_COMMONS_CONNECTION_TIMEOUT_MILLIS=${PnCommonsConnectionTimeoutMillis}'
         ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
         ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
-        ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${PnIoConnectorEventBridgeBusName}'
+        ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${ProjectName}-CoreEventBus'
         ContainerEnvEntry12: !Sub 'PN_IO_CONNECTOR_SQS_POLLING_QUEUE_NAME=${PnIoConnectorPollingQueueName}'
         ContainerEnvEntry13: !Sub 'PN_IO_CONNECTOR_POLLING_INTERVAL_HOURS=${PnIoConnectorPollingIntervalHours}'
         ContainerEnvEntry14: !Sub 'PN_IO_CONNECTOR_IO_CONFIGURATION_ID=${PnIoConnectorIoConfigurationId}'
@@ -373,7 +365,7 @@ Resources:
               - 'events:DescribeEventBus'
               - 'events:PutEvents'
             Resource:
-              - !Ref PnIoConnectorEventBridgeBusArn
+              - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/${ProjectName}-CoreEventBus"
           - Effect: Allow
             Action:
               - sqs:ReceiveMessage
@@ -390,7 +382,7 @@ Resources:
       TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/api-gw-expose-service-openapi.yaml'
       Parameters:
         MicroServiceUniqueName: !Sub '${ProjectName}-io-connector'
-        IntendedUsage: IO
+        IntendedUsage: IO_EXP
         DnsName: !Ref IoApiDnsName
         ProjectName: !Ref ProjectName
         ServiceApiPath: 'io-connector'
