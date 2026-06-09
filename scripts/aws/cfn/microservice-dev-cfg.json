@@ -4,8 +4,6 @@
     "PnCommonsRetryMaxAttempts":"3",
     "PnCommonsConnectionTimeoutMillis":"10000",
     "PnCommonsReadTimeoutMillis":"30000",
-    "LollipopAuthorizerLambdaName":"pn-lollipopAuthorizerLambda",
-    "PnIoConnectorIoConfigurationId": "0e9852ccb8a04128bd637c807b9d80d3",
     "DownloadModeRedirect": "false"
   }
 }

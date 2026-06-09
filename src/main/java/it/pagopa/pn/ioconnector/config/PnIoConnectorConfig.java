@@ -36,6 +36,7 @@ public class PnIoConnectorConfig {
     private String secretsName;
     private List<Integer> sendRetryPolicy;
     private int pollingIntervalHours;
+    private Long pollingFixedIntervalSeconds;
     private String ioConfigurationId;
 
     @Bean

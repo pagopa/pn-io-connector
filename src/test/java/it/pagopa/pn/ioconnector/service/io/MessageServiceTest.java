@@ -43,7 +43,7 @@ class MessageServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        when(requestDao.findById(any())).thenReturn(Optional.empty());
+        when(requestDao.findByIdConsistentRead(any())).thenReturn(Optional.empty());
         lenient().when(sqsClient.getQueueUrl(any(java.util.function.Consumer.class)))
                 .thenReturn(GetQueueUrlResponse.builder().queueUrl("http://localhost:4566/queue/pn-io-connector-send-queue").build());
         lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
@@ -71,7 +71,7 @@ class MessageServiceTest {
                 .markdown("body")
                 .status("ACCEPTED")
                 .build();
-        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+        when(requestDao.findByIdConsistentRead("REQ-001")).thenReturn(Optional.of(existing));
 
         Optional<MessageResponse> result = messageService.handleSendRequest("pn-delivery-push", buildRequest());
 
@@ -84,12 +84,13 @@ class MessageServiceTest {
                 .requestId("REQ-001")
                 .xPagopaIoConCxId("pn-delivery-push")
                 .iun("IUN-001")
+                .recipientTaxId("ANON-TAX")
                 .senderServiceId("SVC-001")
                 .subject("Different Subject")
                 .markdown("body")
                 .status("ACCEPTED")
                 .build();
-        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+        when(requestDao.findByIdConsistentRead("REQ-001")).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", buildRequest()))
                 .isInstanceOf(PnRuntimeException.class)
@@ -102,12 +103,13 @@ class MessageServiceTest {
                 .requestId("REQ-001")
                 .xPagopaIoConCxId("another-cx-id")
                 .iun("IUN-001")
+                .recipientTaxId("ANON-TAX")
                 .senderServiceId("SVC-001")
                 .subject("Test")
                 .markdown("body")
                 .status("ACCEPTED")
                 .build();
-        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+        when(requestDao.findByIdConsistentRead("REQ-001")).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", buildRequest()))
                 .isInstanceOf(PnRuntimeException.class)
@@ -120,6 +122,7 @@ class MessageServiceTest {
                 .requestId("REQ-001")
                 .xPagopaIoConCxId("pn-delivery-push")
                 .iun("IUN-001")
+                .recipientTaxId("ANON-TAX")
                 .senderServiceId("SVC-001")
                 .subject("Test")
                 .markdown("body")
@@ -128,7 +131,7 @@ class MessageServiceTest {
                         IOConnectorRequestEntity.Attachment.builder().fileKey("key-OTHER").build()))
                 .status("ACCEPTED")
                 .build();
-        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+        when(requestDao.findByIdConsistentRead("REQ-001")).thenReturn(Optional.of(existing));
 
         MessageRequest request = buildRequest()
                 .attachments(List.of(
@@ -155,7 +158,7 @@ class MessageServiceTest {
                         IOConnectorRequestEntity.Attachment.builder().fileKey("key2").build()))
                 .status("ACCEPTED")
                 .build();
-        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+        when(requestDao.findByIdConsistentRead("REQ-001")).thenReturn(Optional.of(existing));
 
         MessageRequest request = buildRequest()
                 .attachments(List.of(
@@ -172,6 +175,7 @@ class MessageServiceTest {
                 .requestId("REQ-001")
                 .xPagopaIoConCxId("pn-delivery-push")
                 .iun("IUN-001")
+                .recipientTaxId("ANON-TAX")
                 .senderServiceId("SVC-001")
                 .subject("Test")
                 .markdown("body")
@@ -183,7 +187,7 @@ class MessageServiceTest {
                         .build())
                 .status("ACCEPTED")
                 .build();
-        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+        when(requestDao.findByIdConsistentRead("REQ-001")).thenReturn(Optional.of(existing));
 
         MessageRequest request = buildRequest()
                 .paymentData(new PaymentData()
@@ -215,7 +219,7 @@ class MessageServiceTest {
                         .build())
                 .status("ACCEPTED")
                 .build();
-        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(existing));
+        when(requestDao.findByIdConsistentRead("REQ-001")).thenReturn(Optional.of(existing));
 
         MessageRequest request = buildRequest()
                 .paymentData(new PaymentData()

@@ -135,8 +135,13 @@ public class SendWorker {
         Instant pollingMaxDate = request.getPollingMaxDate() != null
                 ? request.getPollingMaxDate()
                 : now.plus(Duration.ofHours(config.getPollingIntervalHours()));
-        long windowSeconds = Duration.between(now, pollingMaxDate).getSeconds();
-        long pollingIntervalSeconds = Math.max(900, Math.min(21600, windowSeconds / 4));
+        long pollingIntervalSeconds;
+        if (config.getPollingFixedIntervalSeconds() != null && config.getPollingFixedIntervalSeconds() > 0) {
+            pollingIntervalSeconds = config.getPollingFixedIntervalSeconds();
+        } else {
+            long windowSeconds = Duration.between(now, pollingMaxDate).getSeconds();
+            pollingIntervalSeconds = Math.max(900, Math.min(21600, windowSeconds / 4));
+        }
 
         OutcomePollingRequest pollingRequest = OutcomePollingRequest.builder()
                 .requestId(request.getRequestId())

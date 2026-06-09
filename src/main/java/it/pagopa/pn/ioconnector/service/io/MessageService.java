@@ -46,7 +46,7 @@ public class MessageService {
         log.logStartingProcess(HANDLE_SEND_REQUEST);
         MDC.put("requestId", request.getRequestId());
         try {
-            Optional<IOConnectorRequestEntity> existing = requestDao.findById(request.getRequestId());
+            Optional<IOConnectorRequestEntity> existing = requestDao.findByIdConsistentRead(request.getRequestId());
             if (existing.isPresent()) {
                 if (isSamePayload(cxId, request, existing.get())) {
                     log.info("Richiesta duplicata con payload identico — requestId={}", request.getRequestId());
