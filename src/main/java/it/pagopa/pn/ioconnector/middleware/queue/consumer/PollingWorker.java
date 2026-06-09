@@ -73,6 +73,9 @@ public class PollingWorker {
             return;
         }
 
+        log.info("Polling for requestId={} lastKnownStatus={} iun={}",
+                request.getRequestId(), request.getLastKnownStatus(), request.getIun());
+
         String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
         OutcomeEvent statusResponse = ioService.getMessageStatus(request.getRequestId(),
                 request.getXPagopaIoConCxId(), request.getRecipientTaxId(), request.getIoMessageId(), apiKey);
@@ -111,6 +114,8 @@ public class PollingWorker {
 
         if (isFinalState(newStatus, request.isPaymentData())) {
             acknowledgement.acknowledge();
+            log.info("Polling ended with final state for requestId={} lastKnownStatus={} iun={}",
+                    request.getRequestId(), request.getLastKnownStatus(), request.getIun());
             return;
         }
 

@@ -166,6 +166,8 @@ public class SendWorker {
                     .queueUrl(queueUrl)
                     .messageBody(objectMapper.writeValueAsString(pollingRequest))
                     .build());
+            log.info("Polling initialized for requestId={} usedInterval={} configInterval={}",
+                    pollingRequest.getRequestId(), pollingRequest.getPollingIntervalSeconds(), config.getPollingFixedIntervalSeconds());
         } catch (JsonProcessingException e) {
             throw new PnInternalException("Failed to serialize OutcomePollingRequest", ERROR_CODE_PN_GENERIC_ERROR, e);
         }
@@ -236,5 +238,8 @@ public class SendWorker {
                 .eventTimestamp(Instant.now())
                 .build();
         eventBridgeProducer.publish(outcomeEvent);
+
+        log.info("Sender not allowed for requestId={} iun={}",
+                request.getRequestId(), request.getIun());
     }
 }
