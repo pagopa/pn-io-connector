@@ -112,7 +112,7 @@ public class PollingWorker {
                 .eventList(allEvents)
                 .build());
 
-        if (isFinalState(newStatus, request.isPaymentData())) {
+        if (isFinalState(request.isPaymentData(), allEvents)) {
             acknowledgement.acknowledge();
             log.info("Polling ended with final state for requestId={} lastKnownStatus={} iun={}",
                     request.getRequestId(), request.getLastKnownStatus(), request.getIun());
@@ -123,9 +123,13 @@ public class PollingWorker {
         acknowledgement.acknowledge();
     }
 
-    private boolean isFinalState(EventType status, boolean hasPaymentData) {
-        return (!hasPaymentData && status == EventType.READ)
-                || (hasPaymentData && status == EventType.PAID);
+    private boolean isFinalState(boolean hasPaymentData, List<IOConnectorRequestEntity.Event> allEvents) {
+        if (!hasPaymentData) {
+            return allEvents.stream().anyMatch(e -> EventType.READ.name().equals(e.getStatus()));
+        }
+        boolean hasRead = allEvents.stream().anyMatch(e -> EventType.READ.name().equals(e.getStatus()));
+        boolean hasPaid = allEvents.stream().anyMatch(e -> EventType.PAID.name().equals(e.getStatus()));
+        return hasRead && hasPaid;
     }
 
     private void reEnqueue(OutcomePollingRequest request, EventType lastKnownStatus) {
