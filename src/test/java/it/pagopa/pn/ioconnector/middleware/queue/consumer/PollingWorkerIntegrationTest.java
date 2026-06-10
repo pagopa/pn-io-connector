@@ -24,6 +24,7 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,7 +127,11 @@ class PollingWorkerIntegrationTest {
 
     @Test
     void statusChanged_PAID_withPayment_updatesDbAndStops() throws Exception {
-        IOConnectorRequestEntity entity = buildEntity("INT-POLL-003", EventType.READ);
+        IOConnectorRequestEntity entity = buildEntity("INT-POLL-003", EventType.READ,
+                List.of(IOConnectorRequestEntity.Event.builder()
+                        .eventDate(Instant.now().toString())
+                        .status(EventType.READ.name())
+                        .build()));
         dao.save(entity);
 
         OutcomePollingRequest request = buildRequest("INT-POLL-003", EventType.READ, true);
@@ -203,6 +208,11 @@ class PollingWorkerIntegrationTest {
     }
 
     private IOConnectorRequestEntity buildEntity(String requestId, EventType status) {
+        return buildEntity(requestId, status, null);
+    }
+
+    private IOConnectorRequestEntity buildEntity(String requestId, EventType status,
+            List<IOConnectorRequestEntity.Event> eventList) {
         return IOConnectorRequestEntity.builder()
                 .requestId(requestId)
                 .iun("IUN-INT-001")
@@ -210,6 +220,7 @@ class PollingWorkerIntegrationTest {
                 .senderServiceId("SVC-INT-001")
                 .ioMessageId("IO-MSG-INT-001")
                 .status(status.name())
+                .eventList(eventList)
                 .createdAt(Instant.now().toString())
                 .updatedAt(Instant.now().toString())
                 .build();

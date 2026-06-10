@@ -245,10 +245,20 @@ class PollingWorkerTest {
         OutcomePollingRequest request = buildRequest(EventType.READ, 0, true);
         Message<OutcomePollingRequest> message = buildMessage(request, 0);
 
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .eventList(List.of(
+                        IOConnectorRequestEntity.Event.builder()
+                                .eventDate("2024-01-01T00:00:00Z")
+                                .status(EventType.READ.name())
+                                .build()
+                ))
+                .build();
+
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         when(ioService.getMessageStatus(any(), any(), any(), any(), any()))
                 .thenReturn(OutcomeEvent.builder().eventType(EventType.PAID).build());
-        when(dao.findByIdConsistentRead(request.getRequestId())).thenReturn(Optional.empty());
+        when(dao.findByIdConsistentRead(request.getRequestId())).thenReturn(Optional.of(existing));
 
         pollingWorker.process(message, acknowledgement);
 
