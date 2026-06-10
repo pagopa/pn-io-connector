@@ -13,7 +13,7 @@ function makeEvent(correlationId, fileKey, taxId) {
   return {
     pathParameters: { id: correlationId, url: fileKey },
     headers: {
-      'x-pagopa-pn-cx-id': taxId !== undefined ? taxId : FISCAL_CODE
+      'x-pagopa-lollipop-user-id': taxId !== undefined ? taxId : FISCAL_CODE
     }
   };
 }
@@ -50,7 +50,7 @@ describe('eventHandler', () => {
   });
 
   describe('403 cases', () => {
-    it('should return 403 when x-pagopa-pn-cx-id header is absent', async () => {
+    it('should return 403 when x-pagopa-lollipop-user-id header is absent', async () => {
       const handler = makeHandler();
       const event = { pathParameters: { id: CORRELATION_ID, url: FILE_KEY }, headers: {} };
       const result = await handler.handleEvent(event);
@@ -110,7 +110,7 @@ describe('eventHandler', () => {
       const result = await handler.handleEvent(makeEvent(CORRELATION_ID, FILE_KEY));
       expect(result.statusCode).to.equal(200);
       expect(result.isBase64Encoded).to.equal(true);
-      expect(result.headers['Content-Type']).to.equal('application/pdf');
+      expect(result.headers['Content-Type']).to.equal('application/octet-stream');
       expect(result.body).to.equal(fakeBuffer.toString('base64'));
     });
   });

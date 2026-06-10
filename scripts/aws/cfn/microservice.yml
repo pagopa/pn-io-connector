@@ -229,7 +229,7 @@ Parameters:
 
   SafeStorageGetFilePath:
     Type: String
-    Default: /safestorage/internal/v1/files
+    Default: /safe-storage/v1/files
 
   SafeStorageCxId:
     Type: String

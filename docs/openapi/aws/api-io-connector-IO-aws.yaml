@@ -112,7 +112,7 @@ paths:
         '200':
           description: Contenuto binario dell'allegato (modalità bytestream).
           content:
-            application/pdf: {}
+            application/octet-stream: {}
         '302':
           description: Redirect alla presignedUri di SafeStorage.
           headers:
@@ -148,7 +148,6 @@ paths:
           integration.request.path.id: method.request.path.id
           integration.request.path.url: method.request.path.url
         passthroughBehavior: when_no_match
-        contentHandling: CONVERT_TO_TEXT
         timeoutInMillis: 29000
         type: aws_proxy
 components:
@@ -156,7 +155,7 @@ components:
     cxTaxId:
       name: x-pagopa-cx-taxid
       in: header
-      required: true
+      required: false
       schema:
         type: string
         minLength: 16
@@ -216,7 +215,7 @@ components:
     lollipopUserId:
       name: x-pagopa-lollipop-user-id
       in: header
-      required: false
+      required: true
       schema:
         type: string
         minLength: 16
@@ -281,7 +280,7 @@ components:
         authorizerResultTtlInSeconds: 300
         identitySource: >-
           method.request.header.x-pagopa-lollipop-auth-jwt,
-          method.request.header.x-pagopa-cx-taxid
+          method.request.header.x-pagopa-lollipop-user-id
         type: request
 tags:
   - name: IoConnector
@@ -318,4 +317,4 @@ x-amazon-apigateway-request-validators:
     validateRequestParameters: true
 x-amazon-apigateway-request-validator: basic
 x-amazon-apigateway-binary-media-types:
-  - application/pdf
+  - application/octet-stream

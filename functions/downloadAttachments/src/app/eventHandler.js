@@ -19,10 +19,13 @@ exports.handleEvent = async function (event) {
     return responseBuilder.error(400, 'Bad Request', 'Missing required path parameters: requestId / fileKey');
   }
 
-  const recipientTaxId = event?.headers?.["x-pagopa-pn-cx-id"];
+  const recipientTaxId = event?.requestContext?.authorizer?.cx_id;
+
+  console.log(`recipientTaxId in event: ${recipientTaxId}`);
 
   if (!recipientTaxId) {
-    return responseBuilder.error(403, 'Forbidden', 'Missing \'x-pagopa-pn-cx-id\' header');
+    console.error('Missing \'x-pagopa-lollipop-user-id\' -> \'cx_id\' header!');
+    return responseBuilder.error(403, 'Forbidden', 'Missing \'x-pagopa-lollipop-user-id\' -> \'cx_id\' header');
   }
 
   let entity;
@@ -37,10 +40,14 @@ exports.handleEvent = async function (event) {
     return responseBuilder.error(404, 'Not Found', `Message with requestId ${requestId} not found`);
   }
 
+  console.log(`pnIOConnectorRequest Entity found with requestId: ${requestId} and internalId: ${recipientTaxId}`);
+
   const checkAttachment = Array.isArray(entity.attachments) && entity.attachments.some(a => a.fileKey === fileKey);
   if (!checkAttachment) {
     return responseBuilder.error(404, 'Not Found', `File key ${fileKey} not found in request ${requestId} attachments`);
   }
+
+  console.log(`pnIOConnectorRequest Entity attachments found with fileKey: ${fileKey}`);
 
   let presignedUri;
   try {
@@ -50,12 +57,16 @@ exports.handleEvent = async function (event) {
     return responseBuilder.error(502, 'Bad Gateway', 'Error obtaining presigned URI from SafeStorage');
   }
 
+  console.log(`SafeStorage PresignedUri: ${presignedUri}`);
+
   if (downloadModeRedirect) {
+    console.log(`Returning 302 redirect to PresignedUri`);
     return responseBuilder.redirect(presignedUri);
   } else {
     try {
-      const { buffer, contentType } = await fetchBytes(presignedUri);
-      return responseBuilder.bytestream(buffer, contentType);
+      console.log(`Returning bytestream`);
+      const { buffer } = await fetchBytes(presignedUri);
+      return responseBuilder.bytestream(buffer);
     } catch (err) {
       console.error('Bytestream fetch error:', err);
       return responseBuilder.error(502, 'Bad Gateway', 'Error fetching document content');

@@ -8,10 +8,10 @@ function redirect(presignedUri) {
   };
 }
 
-function bytestream(buffer, contentType) {
+function bytestream(buffer) {
   return {
     statusCode: 200,
-    headers: { 'Content-Type': contentType || 'application/pdf' },
+    headers: { 'Content-Type': 'application/octet-stream' },
     body: buffer.toString('base64'),
     isBase64Encoded: true
   };
