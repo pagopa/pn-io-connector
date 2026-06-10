@@ -12,8 +12,10 @@ const FILE_KEY = 'safestorage-key-xyz';
 function makeEvent(correlationId, fileKey, taxId) {
   return {
     pathParameters: { id: correlationId, url: fileKey },
-    headers: {
-      'x-pagopa-lollipop-user-id': taxId !== undefined ? taxId : FISCAL_CODE
+    requestContext: {
+      authorizer: {
+        cx_id: taxId !== undefined ? taxId : FISCAL_CODE
+      }
     }
   };
 }
@@ -50,9 +52,9 @@ describe('eventHandler', () => {
   });
 
   describe('403 cases', () => {
-    it('should return 403 when x-pagopa-lollipop-user-id header is absent', async () => {
+    it('should return 403 when cx_id is missing in requestContext.authorizer', async () => {
       const handler = makeHandler();
-      const event = { pathParameters: { id: CORRELATION_ID, url: FILE_KEY }, headers: {} };
+      const event = { pathParameters: { id: CORRELATION_ID, url: FILE_KEY }, requestContext: { authorizer: {} } };
       const result = await handler.handleEvent(event);
       expect(result.statusCode).to.equal(403);
     });
