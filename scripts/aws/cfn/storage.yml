@@ -28,11 +28,79 @@ Parameters:
     Type: String
     Description: 'Where to send Logs'
 
+  CdcKinesisSourceStreamArn:
+    Type: String
+    Description: 'Where to send CDC events'
+
   LogRetention:
     Type: Number
     Default: 14
 
 Resources:
+
+  # ── DynamoDB ───────────────────────────────────────────────────────────────
+
+  PnIOConnectorRequestsTable:
+    Type: AWS::DynamoDB::Table
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      TableName: !Sub '${ProjectName}-IOConnectorRequests'
+      AttributeDefinitions:
+        - AttributeName: requestId
+          AttributeType: S
+        - AttributeName: ioMessageId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: requestId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ioMessageIdIndex
+          KeySchema:
+            - AttributeName: ioMessageId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      KinesisStreamSpecification:
+        StreamArn: !Ref CdcKinesisSourceStreamArn
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  # ── SQS ───────────────────────────────────────────────────────────────────
+
+  PnIoConnectorSendQueueStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/sqs-queue.yaml'
+      Parameters:
+        QueueName: !Sub '${ProjectName}-io-connector-send-queue'
+        HasDLQ: 'true'
+        MessageRetentionPeriod: 1209600
+        QueueHasAlarm: 'false'
+        AlarmSNSTopicName: !Ref AlarmSNSTopicName
+        VisibilityTimeout: 60
+
+  PnIoConnectorPollingQueueStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/sqs-queue.yaml'
+      Parameters:
+        QueueName: !Sub '${ProjectName}-io-connector-polling-queue'
+        HasDLQ: 'true'
+        MessageRetentionPeriod: 1209600
+        QueueHasAlarm: 'false'
+        AlarmSNSTopicName: !Ref AlarmSNSTopicName
+        VisibilityTimeout: 60
 
   # ── Log Group ──────────────────────────────────────────────────────────────
 
@@ -49,7 +117,34 @@ Resources:
 
 Outputs:
 
+  # DynamoDB
+  PnIoConnectorRequestsTableName:
+    Value: !Ref PnIOConnectorRequestsTable
+    Description: pn-IOConnectorRequests DynamoDB table name
+
+  PnIoConnectorRequestsTableArn:
+    Value: !GetAtt PnIOConnectorRequestsTable.Arn
+    Description: pn-IOConnectorRequests DynamoDB table ARN
+
+  # SQS
+  PnIoConnectorSendQueueName:
+    Value: !GetAtt PnIoConnectorSendQueueStack.Outputs.QueueName
+    Description: pn-io-connector-send-queue name
+
+  PnIoConnectorSendQueueArn:
+    Value: !GetAtt PnIoConnectorSendQueueStack.Outputs.QueueARN
+    Description: pn-io-connector-send-queue ARN
+
+  PnIoConnectorPollingQueueName:
+    Value: !GetAtt PnIoConnectorPollingQueueStack.Outputs.QueueName
+    Description: pn-io-connector-polling-queue name
+
+  PnIoConnectorPollingQueueArn:
+    Value: !GetAtt PnIoConnectorPollingQueueStack.Outputs.QueueARN
+    Description: pn-io-connector-polling-queue ARN
+
   # Log Group
   EcsLogGroup:
     Value: !GetAtt PnIoConnectorLogGroup.Outputs.LogGroupName
     Description: pn-io-connector ECS log group name
+

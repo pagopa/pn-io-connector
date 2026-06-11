@@ -27,9 +27,9 @@ Parameters:
     Type: String
     Description: 'The name of the ECS cluster where the microservice is going to be deployed'
 
-  SubnetsIds:
+  VpcEgressSubnetsIds:
     Type: String
-    Description: 'subnets ids comma separated list. Where to deploy the microservice'
+    Description: 'Subnets where the microservice egress traffic is routed'
 
   VpcId:
     Type: String
@@ -160,6 +160,100 @@ Parameters:
     Type: String
     Default: ''
 
+  PnIoConnectorRequestsTableName:
+    Type: String
+    Description: 'Name of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
+
+  PnIoConnectorRequestsTableArn:
+    Type: String
+    Description: 'ARN of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
+
+  PnIoConnectorSendQueueName:
+    Type: String
+    Description: 'Name of SQS queue pn-io-connector-send-queue (from storage.yml output)'
+
+  PnIoConnectorSendQueueArn:
+    Type: String
+    Description: 'ARN of SQS queue pn-io-connector-send-queue (from storage.yml output)'
+
+  PnIoConnectorSecretsName:
+    Type: String
+    Description: 'Secret ID for IO Api'
+
+  PnIoConnectorManagedPolicyName:
+    Type: String
+    Description: 'Nome della managed policy associata ad IO Connector'
+    Default: 'PnIoConnectorManagedPolicyName'
+
+  PnCommonsRetryMaxAttempts:
+    Type: Number
+    Default: 3
+    Description: 'Max attempts for pn-commons RestClientRetryable'
+
+  PnCommonsConnectionTimeoutMillis:
+    Type: Number
+    Default: 10000
+    Description: 'Connection timeout in ms for pn-commons RestClient'
+
+  PnCommonsReadTimeoutMillis:
+    Type: Number
+    Default: 30000
+    Description: 'Read timeout in ms for pn-commons RestClient'
+
+  IoApiDnsName:
+    Type: String
+    Description: 'DNS name of the API Gateway stage exposed to Backend IO'
+
+  LollipopAuthorizerLambdaName:
+    Type: String
+    Description: 'Name of the LollipopAuthorizer Lambda function (from pn-auth-fleet)'
+
+  PnDataVaultBaseUrl:
+    Type: String
+    Default: 'http://alb.confidential.pn.internal:8080'
+    Description: 'Base URL of pn-data-vault internal service'
+
+  PnIoConnectorPollingQueueName:
+    Type: String
+    Description: 'Name of SQS queue pn-io-connector-polling-queue (from storage.yml output)'
+
+  PnIoConnectorPollingQueueArn:
+    Type: String
+    Description: 'ARN of SQS queue pn-io-connector-polling-queue (from storage.yml output)'
+
+  # -- Lambda downloadAttachment params ----------------------------------------------
+  SandboxSafeStorageBaseUrl:
+    Type: String
+    Default: 'http://alb.confidential.pn.internal:8080'
+    Description: 'Base URL of the SafeStorage microservice'
+
+  SafeStorageGetFilePath:
+    Type: String
+    Default: /safe-storage/v1/files
+
+  SafeStorageCxId:
+    Type: String
+    Default: pn-io-connector
+
+  SafeStoragePresignedUrlField:
+    Type: String
+    Default: download.url
+    Description: 'Dot-notation path to the presigned URL field in the SafeStorage response'
+
+  DownloadModeRedirect:
+    Type: String
+    Default: 'false'
+    AllowedValues: [ 'true', 'false' ]
+    Description: 'true returns 302 Location; false returns the PDF binary'
+
+  SubnetsIds:
+    Type: CommaDelimitedList
+    Description: 'subnets ids comma separated list. Where to deploy the microservice'
+
+  DownloadAttachmentsLambdaTimeout:
+    Type: Number
+    Default: 10
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -188,22 +282,33 @@ Resources:
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
-        MappedPaths: '/io/message*'
+        ContainerEnvEntry4: !Sub 'PN_IO_CONNECTOR_DYNAMODB_TABLE_NAME=${PnIoConnectorRequestsTableName}'
+        ContainerEnvEntry5: !Sub 'PN_IO_CONNECTOR_SECRETS_NAME=${PnIoConnectorSecretsName}'
+        ContainerEnvEntry6: !Sub 'PN_IO_CONNECTOR_SQS_SEND_QUEUE_NAME=${PnIoConnectorSendQueueName}'
+        ContainerEnvEntry7: !Sub 'PN_COMMONS_RETRY_MAX_ATTEMPTS=${PnCommonsRetryMaxAttempts}'
+        ContainerEnvEntry8: !Sub 'PN_COMMONS_CONNECTION_TIMEOUT_MILLIS=${PnCommonsConnectionTimeoutMillis}'
+        ContainerEnvEntry9: !Sub 'PN_COMMONS_READ_TIMEOUT_MILLIS=${PnCommonsReadTimeoutMillis}'
+        ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
+        ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${ProjectName}-CoreEventBus'
+        ContainerEnvEntry12: !Sub 'PN_IO_CONNECTOR_SQS_POLLING_QUEUE_NAME=${PnIoConnectorPollingQueueName}'
+        MappedPaths: '/io-connector/message*,/io-connector/profile*'
         ECSClusterName: !Ref ECSClusterName
-        Subnets: !Ref SubnetsIds
+        Subnets: !Ref VpcEgressSubnetsIds
         VpcId: !Ref VpcId
         EcsDefaultSecurityGroup: !Ref EcsDefaultSecurityGroup
         LoadBalancerListenerArn: !Ref ApplicationLoadBalancerListenerArn
         LoadbalancerRulePriority: !Ref MicroserviceNumber
         AlbSecurityGroup: !Ref AlbSecurityGroup
-        TaskRoleManagedPolicyArn: !Ref IoConnectorMicroserviceTaskManagedPolicy
+        TaskRoleManagedPolicyArn: !Ref PnIoConnectorManagedPolicy
         EcsLogGroup: !Ref EcsLogGroup
         LogAlarmStrategyV1: !Ref LogAlarmStrategy
         ApplicativeEnvFileChecksum: !Ref ApplicativeEnvFileChecksum
 
-  IoConnectorMicroserviceTaskManagedPolicy:
+  PnIoConnectorManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
+      Description: 'Managed policy granting pn-io-connector access to S3, SSM, DynamoDB, SQS, Secrets Manager and EventBridge'
+      ManagedPolicyName: !Ref PnIoConnectorManagedPolicyName
       PolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -218,3 +323,130 @@ Resources:
               - ssm:GetParameters
               - ssm:GetParametersByPath
             Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/io-connector/*'
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:Query
+            Resource:
+              - !Ref PnIoConnectorRequestsTableArn
+              - !Sub '${PnIoConnectorRequestsTableArn}/index/*'
+          - Effect: Allow
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:SendMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+            Resource: !Ref PnIoConnectorSendQueueArn
+          - Effect: Allow
+            Sid: 'ReadFromSecretsManagerIOConnectorSecrets'
+            Action:
+              - 'secretsmanager:DescribeSecret'
+              - 'secretsmanager:GetSecretValue'
+            Resource:
+              - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]
+          - Effect: Allow
+            Action:
+              - 'events:DescribeEventBus'
+              - 'events:PutEvents'
+            Resource:
+              - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/${ProjectName}-CoreEventBus"
+          - Effect: Allow
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:SendMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+              - sqs:ChangeMessageVisibility
+            Resource: !Ref PnIoConnectorPollingQueueArn
+
+  PnIoConnectorIoApi:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/api-gw-expose-service-openapi.yaml'
+      Parameters:
+        MicroServiceUniqueName: !Sub '${ProjectName}-io-connector'
+        IntendedUsage: IO_EXP
+        DnsName: !Ref IoApiDnsName
+        ProjectName: !Ref ProjectName
+        ServiceApiPath: 'io-connector'
+        NetworkLoadBalancerLink: !Ref NetworkLoadBalancerLink
+        ApplicationLoadBalancerDomain: !Ref ApplicationLoadBalancerDomain
+        AlarmSNSTopicArn: !Ref AlarmSNSTopicArn
+        CloudwatchLogKinesisStreamArn: !Ref LogsKinesisSourceStreamArn
+        OpenApiBucketName: !Ref MicroserviceBucketName
+        OpenApiBucketKey: !Sub '${MicroserviceBucketBaseKey}/docs/openapi/aws/api-io-connector-IO-aws.yaml'
+
+  DownloadAttachmentsLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${ProjectName}-download-attachments-lambda-sg'
+      VpcId: !Ref VpcId
+
+  DownloadAttachmentsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DownloadAttachmentsLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PnIoConnectorIoApi.Outputs.RestApiId}/*/*/messages/*'
+
+  DownloadAttachmentsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-download-attachments'
+      Runtime: nodejs24.x
+      Handler: index.handler
+      Role: !GetAtt DownloadAttachmentsLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref MicroserviceBucketName
+        S3Key: !Sub '${MicroserviceBucketBaseKey}/functions_zip/downloadAttachments.zip'
+      Timeout: !Ref DownloadAttachmentsLambdaTimeout
+      LoggingConfig:
+        LogGroup: !Sub '/aws/lambda/${ProjectName}-download-attachments'
+      TracingConfig:
+        Mode: Active
+      Layers:
+        - !Sub 'arn:aws:lambda:${AWS::Region}:339249233099:layer:LambdaInsightsExtension:13'
+      VpcConfig:
+        SubnetIds: !Ref SubnetsIds
+        SecurityGroupIds:
+          - !GetAtt DownloadAttachmentsLambdaSecurityGroup.GroupId
+      Environment:
+        Variables:
+          DOWNLOAD_MODE_REDIRECT: !Ref DownloadModeRedirect
+          REQUESTS_TABLE_NAME: !Ref PnIoConnectorRequestsTableName
+          PN_SAFESTORAGE_BASE_URL: !Ref SandboxSafeStorageBaseUrl
+          PN_SAFESTORAGE_GET_FILE_PATH: !Ref SafeStorageGetFilePath
+          PN_SAFESTORAGE_CX_ID: !Ref SafeStorageCxId
+          PN_SAFESTORAGE_PRESIGNED_URL: !Ref SafeStoragePresignedUrlField
+
+  DownloadAttachmentsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-download-attachment-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: DynamoDbQueryPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !Ref PnIoConnectorRequestsTableArn
