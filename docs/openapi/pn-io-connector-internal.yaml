@@ -193,8 +193,9 @@ components:
           type: integer
           description: >
             Numero massimo di ore per cui effettuare il polling degli esiti.
-            Determinato dall'orchestratore. Default configurato: 48h.
-          default: 48
+            Se non valorizzato viene utilizzato il default configurato nella 
+            property pn.io-connector.polling-interval-hours.
+          nullable: true
 
     Attachment:
       type: object

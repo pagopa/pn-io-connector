@@ -21,6 +21,8 @@ import software.amazon.awssdk.services.sqs.model.GetQueueUrlResponse;
 
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.PaymentData;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -240,6 +242,21 @@ class MessageServiceTest {
         ArgumentCaptor<MessageSendRequest> sqsMsgCaptor = ArgumentCaptor.forClass(MessageSendRequest.class);
         verify(objectMapper).writeValueAsString(sqsMsgCaptor.capture());
         assertThat(sqsMsgCaptor.getValue().getPollingMaxDate()).isNotNull();
+    }
+
+    @Test
+    void handleSendRequest_withoutPollingMaxHours_usesConfigDefault() throws Exception {
+        when(config.getPollingIntervalHours()).thenReturn(24);
+        MessageRequest request = buildRequest();
+
+        Instant before = Instant.now();
+        messageService.handleSendRequest("pn-delivery-push", request);
+        Instant after = Instant.now();
+
+        ArgumentCaptor<MessageSendRequest> sqsMsgCaptor = ArgumentCaptor.forClass(MessageSendRequest.class);
+        verify(objectMapper).writeValueAsString(sqsMsgCaptor.capture());
+        assertThat(sqsMsgCaptor.getValue().getPollingMaxDate())
+                .isBetween(before.plus(24, ChronoUnit.HOURS), after.plus(24, ChronoUnit.HOURS));
     }
 
     private MessageRequest buildRequest() {

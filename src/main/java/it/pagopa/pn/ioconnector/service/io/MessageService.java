@@ -61,7 +61,7 @@ public class MessageService {
                 }
             }
 
-            long pollingMaxHours = request.getPollingMaxHours() != null ? request.getPollingMaxHours() : 48;
+            long pollingMaxHours = request.getPollingMaxHours() != null ? request.getPollingMaxHours() : config.getPollingIntervalHours();
             MessageSendRequest sqsMsg = MessageSendRequest.builder()
                 .requestId(request.getRequestId())
                 .xPagopaIoConCxId(cxId)
