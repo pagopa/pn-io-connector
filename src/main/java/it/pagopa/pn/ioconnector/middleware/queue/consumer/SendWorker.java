@@ -166,8 +166,8 @@ public class SendWorker {
                     .queueUrl(queueUrl)
                     .messageBody(objectMapper.writeValueAsString(pollingRequest))
                     .build());
-            log.info("Polling initialized for requestId={} usedInterval={} configInterval={}",
-                    pollingRequest.getRequestId(), pollingRequest.getPollingIntervalSeconds(), config.getPollingFixedIntervalSeconds());
+            log.info("Polling initialized for requestId={} until {} with interval={}",
+                    pollingRequest.getRequestId(), pollingMaxDate, pollingRequest.getPollingIntervalSeconds());
         } catch (JsonProcessingException e) {
             throw new PnInternalException("Failed to serialize OutcomePollingRequest", ERROR_CODE_PN_GENERIC_ERROR, e);
         }

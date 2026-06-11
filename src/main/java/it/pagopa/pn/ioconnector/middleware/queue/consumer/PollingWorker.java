@@ -67,14 +67,12 @@ public class PollingWorker {
         }
 
         if (request.getPollingMaxDate() != null && now.isAfter(request.getPollingMaxDate())) {
-            log.warn("Polling exhausted requestId={} lastKnownStatus={} iun={}",
-                    request.getRequestId(), request.getLastKnownStatus(), request.getIun());
+            log.warn("Polling exhausted for requestId={}, lastKnownStatus is {}", request.getRequestId(), request.getLastKnownStatus());
             acknowledgement.acknowledge();
             return;
         }
 
-        log.info("Polling for requestId={} lastKnownStatus={} iun={}",
-                request.getRequestId(), request.getLastKnownStatus(), request.getIun());
+        log.info("Executing polling for requestId={}, lastKnownStatus is {}", request.getRequestId(), request.getLastKnownStatus());
 
         String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
         OutcomeEvent statusResponse = ioService.getMessageStatus(request.getRequestId(),
@@ -114,8 +112,7 @@ public class PollingWorker {
 
         if (isFinalState(request.isPaymentData(), allEvents)) {
             acknowledgement.acknowledge();
-            log.info("Polling ended with final state for requestId={} lastKnownStatus={} iun={}",
-                    request.getRequestId(), request.getLastKnownStatus(), request.getIun());
+            log.info("Polling ended with final state {} for requestId={}", newStatus, request.getRequestId());
             return;
         }
 
