@@ -115,6 +115,29 @@ describe('eventHandler', () => {
       expect(result.headers['Content-Type']).to.equal('application/octet-stream');
       expect(result.body).to.equal(fakeBuffer.toString('base64'));
     });
+
+    it('should return 502 when the presigned URL responds with a non-200 status', async () => {
+      process.env.DOWNLOAD_MODE_REDIRECT = 'false';
+      const handler = proxyquire('../app/eventHandler', {
+        './lib/dynamoDbClient': { findByRequestIdAndRecipientTaxId: async () => FIXTURE },
+        './lib/safeStorageClient': { getPresignedUri: async () => PRESIGNED_URI },
+        'https': {
+          get: (_url, callback) => {
+            const mockRes = {
+              statusCode: 403,
+              headers: { 'content-type': 'application/xml' },
+              resume: () => {},
+              on: () => mockRes
+            };
+            callback(mockRes);
+            return { on: () => {} };
+          }
+        }
+      });
+      const result = await handler.handleEvent(makeEvent(CORRELATION_ID, FILE_KEY));
+      expect(result.statusCode).to.equal(502);
+      expect(JSON.parse(result.body).status).to.equal(502);
+    });
   });
 
   describe('DynamoDB error', () => {

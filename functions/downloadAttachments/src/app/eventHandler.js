@@ -57,15 +57,15 @@ exports.handleEvent = async function (event) {
     return responseBuilder.error(502, 'Bad Gateway', 'Error obtaining presigned URI from SafeStorage');
   }
 
-  console.log(`SafeStorage PresignedUri: ${presignedUri}`);
+  console.log(`Obtained SafeStorage presignedUri: ${presignedUri}`);
 
   if (downloadModeRedirect) {
-    console.log(`Returning 302 redirect to PresignedUri`);
+    console.log(`Returning 302 redirect to presignedUri`);
     return responseBuilder.redirect(presignedUri);
   } else {
     try {
-      console.log(`Returning bytestream`);
-      const { buffer } = await fetchBytes(presignedUri);
+      const buffer = await fetchBytes(presignedUri);
+      console.log(`Obtained bytestream from presignedUri`);
       return responseBuilder.bytestream(buffer);
     } catch (err) {
       console.error('Bytestream fetch error:', err);
@@ -82,12 +82,14 @@ function fetchBytes(url) {
         fetchBytes(res.headers.location).then(resolve).catch(reject);
         return;
       }
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error(`Error invoking SafeStorage presignedUri ${res.statusCode}`));
+        return;
+      }
       const chunks = [];
       res.on('data', chunk => chunks.push(chunk));
-      res.on('end', () => resolve({
-        buffer: Buffer.concat(chunks),
-        contentType: res.headers['content-type'] || 'application/pdf'
-      }));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
     }).on('error', reject);
   });
 }

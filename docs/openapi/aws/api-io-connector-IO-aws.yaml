@@ -317,4 +317,4 @@ x-amazon-apigateway-request-validators:
     validateRequestParameters: true
 x-amazon-apigateway-request-validator: basic
 x-amazon-apigateway-binary-media-types:
-  - application/octet-stream
+  - '*/*'
