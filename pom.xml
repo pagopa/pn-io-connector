@@ -19,8 +19,6 @@
     </scm>
     <properties>
         <pagopa.codegen.version>v01.16.01</pagopa.codegen.version>
-		<java.version>11</java.version>
-		<awspring.version>2.3.2</awspring.version>
 	</properties>
 
     <dependencies>
