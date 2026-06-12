@@ -204,10 +204,6 @@ Parameters:
     Type: String
     Description: 'DNS name of the API Gateway stage exposed to Backend IO'
 
-  LollipopAuthorizerLambdaName:
-    Type: String
-    Description: 'Name of the LollipopAuthorizer Lambda function (from pn-auth-fleet)'
-
   PnDataVaultBaseUrl:
     Type: String
     Default: 'http://alb.confidential.pn.internal:8080'
