@@ -22,6 +22,7 @@ import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.Message;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
@@ -189,16 +190,18 @@ public class SendWorker {
         if (request.getAttachments() == null || request.getAttachments().isEmpty()) return true;
         return request.getAttachments().stream()
                 .allMatch(a -> a.getFileKey() != null
-                        && a.getFileKey().toLowerCase(Locale.ROOT).endsWith(".pdf"));
+                        && a.getFileKey().toLowerCase(Locale.ROOT).endsWith(".pdf")
+                        && a.getName() != null
+                        && a.getName().toLowerCase(Locale.ROOT).endsWith(".pdf"));
     }
 
     private boolean hasUniqueAttachmentIds(MessageSendRequest request) {
         if (request.getAttachments() == null || request.getAttachments().isEmpty()) return true;
-        long distinct = request.getAttachments().stream()
+        List<String> ids = request.getAttachments().stream()
                 .map(MessageSendRequest.Attachment::getId)
-                .distinct()
-                .count();
-        return distinct == request.getAttachments().size();
+                .toList();
+        if (ids.stream().anyMatch(id -> !StringUtils.hasText(id))) return false;
+        return ids.stream().distinct().count() == ids.size();
     }
 
     private void handleInvalidAttachmentFormat(MessageSendRequest request) {
