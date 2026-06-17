@@ -25,7 +25,9 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import static it.pagopa.pn.commons.exceptions.PnExceptionsCodes.ERROR_CODE_PN_GENERIC_ERROR;
 
@@ -75,58 +77,107 @@ public class PollingWorker {
         log.info("Executing polling for requestId={}, lastKnownStatus is {}", request.getRequestId(), request.getLastKnownStatus());
 
         String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
-        OutcomeEvent statusResponse = ioService.getMessageStatus(request.getRequestId(),
-                request.getXPagopaIoConCxId(), request.getRecipientTaxId(), request.getIoMessageId(), apiKey);
 
-        if (statusResponse == null || statusResponse.getEventType() == request.getLastKnownStatus()) {
+        // Calcolo i nuovi stati rilevati da IO
+        Set<EventType> reached = ioService.getReachedEventTypes(
+                request.getRecipientTaxId(), request.getIoMessageId(), apiKey);
+
+        // Recupero gli stati già elaborati
+        List<IOConnectorRequestEntity.Event> allEvents = new ArrayList<>();
+        dao.findByIdConsistentRead(request.getRequestId()).ifPresent(e -> {
+            if (e.getEventList() != null) allEvents.addAll(e.getEventList());
+        });
+        EnumSet<EventType> alreadyRecorded = toEventTypeSet(allEvents);
+
+        // Rimuovo eventuali stati nuovamente rilevati che sono già stati registrati
+        EnumSet<EventType> newEvents = EnumSet.noneOf(EventType.class);
+        newEvents.addAll(reached);
+        newEvents.removeAll(alreadyRecorded);
+
+        if (newEvents.isEmpty()) {
+            // Nessun nuovo evento, proseguo col polling
             reEnqueue(request, request.getLastKnownStatus());
             acknowledgement.acknowledge();
             return;
         }
 
-        EventType newStatus = statusResponse.getEventType();
-
-        if (newStatus.isNotify()) {
-            eventBridgeProducer.publish(OutcomeEvent.builder()
-                    .requestId(request.getRequestId())
-                    .xPagopaIoConCxId(request.getXPagopaIoConCxId())
-                    .ioMessageId(request.getIoMessageId())
-                    .eventType(newStatus)
-                    .eventTimestamp(now)
+        // Notifico i nuovi stati e li aggiungo alla eventList
+        String nowStr = now.toString();
+        for (EventType ev : newEvents) {
+            if (ev.isNotify()) {
+                eventBridgeProducer.publish(OutcomeEvent.builder()
+                        .requestId(request.getRequestId())
+                        .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                        .ioMessageId(request.getIoMessageId())
+                        .eventType(ev)
+                        .eventTimestamp(now)
+                        .build());
+            }
+            allEvents.add(IOConnectorRequestEntity.Event.builder()
+                    .eventDate(nowStr)
+                    .status(ev.name())
                     .build());
         }
 
-        List<IOConnectorRequestEntity.Event> allEvents = new ArrayList<>();
-        dao.findByIdConsistentRead(request.getRequestId()).ifPresent(e -> {
-            if (e.getEventList() != null) allEvents.addAll(e.getEventList());
-        });
-        allEvents.add(IOConnectorRequestEntity.Event.builder()
-                .eventDate(now.toString())
-                .status(newStatus.name())
-                .build());
+        // Setto lo stato più "avanzato" nel campo status
+        EventType denormalizedStatus = highestRank(allEvents, request.getLastKnownStatus());
         dao.update(IOConnectorRequestEntity.builder()
                 .requestId(request.getRequestId())
-                .status(newStatus.name())
+                .status(denormalizedStatus.name())
                 .eventList(allEvents)
                 .build());
 
         if (isFinalState(request.isPaymentData(), allEvents)) {
             acknowledgement.acknowledge();
-            log.info("Polling ended with final state {} for requestId={}", newStatus, request.getRequestId());
+            log.info("Polling ended with final state {} for requestId={}", denormalizedStatus, request.getRequestId());
             return;
         }
 
-        reEnqueue(request, newStatus);
+        reEnqueue(request, denormalizedStatus);
         acknowledgement.acknowledge();
     }
 
     private boolean isFinalState(boolean hasPaymentData, List<IOConnectorRequestEntity.Event> allEvents) {
-        if (!hasPaymentData) {
-            return allEvents.stream().anyMatch(e -> EventType.READ.name().equals(e.getStatus()));
+        if (contains(allEvents, EventType.IO_DELIVERY_FAILED)) {
+            return true;
         }
-        boolean hasRead = allEvents.stream().anyMatch(e -> EventType.READ.name().equals(e.getStatus()));
-        boolean hasPaid = allEvents.stream().anyMatch(e -> EventType.PAID.name().equals(e.getStatus()));
-        return hasRead && hasPaid;
+        boolean hasRead = contains(allEvents, EventType.READ);
+        if (!hasPaymentData) {
+            return hasRead;
+        }
+        return hasRead && contains(allEvents, EventType.PAID);
+    }
+
+    private boolean contains(List<IOConnectorRequestEntity.Event> events, EventType eventType) {
+        return events.stream().anyMatch(e -> eventType.name().equals(e.getStatus()));
+    }
+
+    private EnumSet<EventType> toEventTypeSet(List<IOConnectorRequestEntity.Event> events) {
+        EnumSet<EventType> set = EnumSet.noneOf(EventType.class);
+        for (IOConnectorRequestEntity.Event e : events) {
+            try {
+                set.add(EventType.valueOf(e.getStatus()));
+            } catch (IllegalArgumentException | NullPointerException ignored) {
+                // Eventuali EventType non riconosciuti vanno ignorati
+            }
+        }
+        return set;
+    }
+
+    private EventType highestRank(List<IOConnectorRequestEntity.Event> events, EventType fallback) {
+        EventType highest = fallback;
+        for (IOConnectorRequestEntity.Event e : events) {
+            EventType t;
+            try {
+                t = EventType.valueOf(e.getStatus());
+            } catch (IllegalArgumentException | NullPointerException ignored) {
+                continue;
+            }
+            if (highest == null || t.getProgressionRank() > highest.getProgressionRank()) {
+                highest = t;
+            }
+        }
+        return highest;
     }
 
     private void reEnqueue(OutcomePollingRequest request, EventType lastKnownStatus) {
