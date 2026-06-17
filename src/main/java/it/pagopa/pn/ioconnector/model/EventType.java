@@ -7,15 +7,17 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum EventType {
 
-    ACCEPTED(false),
-    SENDER_NOT_ALLOWED(true),
-    SENT_TO_IO(true),
-    DELIVERED_TO_USER(true),
-    READ(true),
-    PAID(true),
-    POLLING_EXHAUSTED(false),
-    IO_SEND_RETRY_EXHAUSTED(false),
-    ATTACHMENTS_VALIDATION_FAILED(false);
+    ACCEPTED(false, 10),
+    SENT_TO_IO(true, 20),
+    DELIVERED_TO_USER(true, 30),
+    READ(true, 40),
+    PAID(true, 50),
+    IO_DELIVERY_FAILED(false, 60),
+    SENDER_NOT_ALLOWED(true, 0),
+    POLLING_EXHAUSTED(false, 0),
+    IO_SEND_RETRY_EXHAUSTED(false, 0),
+    ATTACHMENTS_VALIDATION_FAILED(false, 0);
 
     private final boolean notify;
+    private final int progressionRank;
 }

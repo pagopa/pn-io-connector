@@ -14,10 +14,11 @@ import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.Payee;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.PaymentData;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ThirdPartyData;
 import it.pagopa.pn.ioconnector.model.EventType;
-import it.pagopa.pn.ioconnector.model.OutcomeEvent;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
+import it.pagopa.pn.ioconnector.model.io.MessageStatusValue;
 
-import java.time.Instant;
+import java.util.EnumSet;
+import java.util.Set;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -82,29 +83,38 @@ public class IOService {
         return ioClient.sendMessage(newMessage, apiKey);
     }
 
-    public OutcomeEvent getMessageStatus(String requestId, String xPagopaIoConCxId,
-                                         String taxId, String ioMessageId, String apiKey) {
-        ExternalMessageResponseWithContent response = ioClient.getMessageStatus(taxId, ioMessageId, apiKey);
-        if (response == null) {
-            return null;
-        }
-        return OutcomeEvent.builder()
-                .requestId(requestId)
-                .xPagopaIoConCxId(xPagopaIoConCxId)
-                .ioMessageId(ioMessageId)
-                .eventType(mapToEventType(response))
-                .eventTimestamp(Instant.now())
-                .build();
+    /**
+     * Restituisce l'insieme degli stati IO raggiunti dal messaggio, derivati indipendentemente dai tre
+     * attributi {@code getMessage} ({@code status}, {@code read_status}, {@code payment_status}).
+     * Insieme vuoto = nulla di osservabile (o risposta nulla) → il polling prosegue.
+     */
+    public Set<EventType> getReachedEventTypes(String taxId, String ioMessageId, String apiKey) {
+        return mapToReachedEventTypes(ioClient.getMessageStatus(taxId, ioMessageId, apiKey));
     }
 
-    private EventType mapToEventType(ExternalMessageResponseWithContent response) {
-        if ("PAID".equals(response.getPaymentStatus())) {
-            return EventType.PAID;
+    private Set<EventType> mapToReachedEventTypes(ExternalMessageResponseWithContent response) {
+        EnumSet<EventType> reached = EnumSet.noneOf(EventType.class);
+        if (response == null) {
+            return reached;
         }
-        if ("READ".equals(response.getReadStatus())) {
-            return EventType.READ;
+        MessageStatusValue status = response.getStatus();
+        if (status == MessageStatusValue.FAILED || status == MessageStatusValue.REJECTED) {
+            reached.add(EventType.IO_DELIVERY_FAILED);
+            return reached;
         }
-        return EventType.DELIVERED_TO_USER;
+        boolean read = "READ".equals(response.getReadStatus());
+        boolean paid = "PAID".equals(response.getPaymentStatus());
+        // consegna inferita anche da READ/PAID (presuppongono la consegna; PROCESSED è sticky)
+        if (status == MessageStatusValue.PROCESSED || read || paid) {
+            reached.add(EventType.DELIVERED_TO_USER);
+        }
+        if (read) {
+            reached.add(EventType.READ);
+        }
+        if (paid) {
+            reached.add(EventType.PAID);
+        }
+        return reached;
     }
 
     public String getServiceUseKey(String serviceId) {
