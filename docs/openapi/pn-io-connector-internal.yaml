@@ -202,6 +202,7 @@ components:
       required:
         - id
         - fileKey
+        - name
       properties:
         id:
           type: string
@@ -209,6 +210,10 @@ components:
         fileKey:
           type: string
           description: Chiave del file allegato (deve avere estensione .pdf).
+        name:
+          type: string
+          maxLength: 127
+          description: Nome allegato con desinenza ".pdf" obbligatoria.
 
     PaymentData:
       type: object

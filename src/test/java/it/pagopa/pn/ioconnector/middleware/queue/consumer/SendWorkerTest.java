@@ -452,6 +452,36 @@ class SendWorkerTest {
     }
 
     @Test
+    void duplicateAttachmentIds_updatesDbAndPublishesEvent() {
+        MessageSendRequest request = buildRequest();
+        request.setAttachments(List.of(
+                MessageSendRequest.Attachment.builder().id("att-1").fileKey("doc1.pdf").name("doc1.pdf").build(),
+                MessageSendRequest.Attachment.builder().id("att-1").fileKey("doc2.pdf").name("doc2.pdf").build()
+        ));
+        Message<MessageSendRequest> message = buildMessage(request);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+
+        sendWorker.process(message, acknowledgement);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.ATTACHMENTS_VALIDATION_FAILED.name());
+        assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
+        assertThat(entityCaptor.getValue().getEventList().get(0).getStatus())
+                .isEqualTo(EventType.ATTACHMENTS_VALIDATION_FAILED.name());
+
+        if (EventType.ATTACHMENTS_VALIDATION_FAILED.isNotify()) {
+            ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+            verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+            assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.ATTACHMENTS_VALIDATION_FAILED);
+            assertThat(outcomeCaptor.getValue().getRequestId()).isEqualTo(request.getRequestId());
+        }
+
+        verify(ioService, never()).sendMessage(any(), any());
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
     void deanonymize_nonRetryableError_400_propagatesException() {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);

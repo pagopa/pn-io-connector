@@ -55,7 +55,7 @@ public class SendWorker {
 
         String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
 
-        if (!isAttachmentFormatValid(request)) {
+        if (!isAttachmentFormatValid(request) || !hasUniqueAttachmentIds(request)) {
             handleInvalidAttachmentFormat(request);
             acknowledgement.acknowledge();
             return;
@@ -190,6 +190,15 @@ public class SendWorker {
         return request.getAttachments().stream()
                 .allMatch(a -> a.getFileKey() != null
                         && a.getFileKey().toLowerCase(Locale.ROOT).endsWith(".pdf"));
+    }
+
+    private boolean hasUniqueAttachmentIds(MessageSendRequest request) {
+        if (request.getAttachments() == null || request.getAttachments().isEmpty()) return true;
+        long distinct = request.getAttachments().stream()
+                .map(MessageSendRequest.Attachment::getId)
+                .distinct()
+                .count();
+        return distinct == request.getAttachments().size();
     }
 
     private void handleInvalidAttachmentFormat(MessageSendRequest request) {
