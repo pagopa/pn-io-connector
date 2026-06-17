@@ -34,6 +34,7 @@ public class MessageSendRequest {
     @AllArgsConstructor
     public static class Attachment {
         private String id;
+        private String name;
         private String fileKey;
     }
 
