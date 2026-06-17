@@ -164,13 +164,13 @@ class PollingWorkerTest {
 
     @Test
     void noNewEvents_reEnqueues() {
-        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        OutcomePollingRequest request = buildRequest(EventType.DELIVERED_TO_USER, 0, false);
         Message<OutcomePollingRequest> message = buildMessage(request, 0);
 
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
-        when(ioService.getReachedEventTypes(any(), any(), any())).thenReturn(Set.of(EventType.SENT_TO_IO));
+        when(ioService.getReachedEventTypes(any(), any(), any())).thenReturn(Set.of(EventType.DELIVERED_TO_USER));
         when(dao.findByIdConsistentRead(request.getRequestId()))
-                .thenReturn(Optional.of(existingEntity(EventType.ACCEPTED, EventType.SENT_TO_IO)));
+                .thenReturn(Optional.of(existingEntity(EventType.SENT_TO_IO, EventType.DELIVERED_TO_USER)));
         mockQueueUrl();
         when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
 
