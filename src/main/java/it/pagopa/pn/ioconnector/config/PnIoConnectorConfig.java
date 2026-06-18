@@ -35,7 +35,7 @@ public class PnIoConnectorConfig {
     private String eventBridgeBusName;
     private String secretsName;
     private List<Integer> sendRetryPolicy;
-    private int pollingIntervalHours;
+    private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
     private String ioConfigurationId;
 

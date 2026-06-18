@@ -61,7 +61,7 @@ public class MessageService {
                 }
             }
 
-            long pollingMaxHours = request.getPollingMaxHours() != null ? request.getPollingMaxHours() : config.getPollingIntervalHours();
+            long pollingMaxMins = request.getPollingMaxMins() != null ? request.getPollingMaxMins() : config.getPollingIntervalMins();
             MessageSendRequest sqsMsg = MessageSendRequest.builder()
                 .requestId(request.getRequestId())
                 .xPagopaIoConCxId(cxId)
@@ -89,7 +89,7 @@ public class MessageService {
                         creditorTaxId(request.getPaymentData().getCreditorTaxId()).
                         invalidAfterDueDate(request.getPaymentData().getInvalidAfterDueDate()).
                         build() : null)
-                .pollingMaxDate(Instant.now().plus(pollingMaxHours, ChronoUnit.HOURS))
+                .pollingMaxDate(Instant.now().plus(pollingMaxMins, ChronoUnit.MINUTES))
                 .createdAt(Instant.now())
                 .build();
 

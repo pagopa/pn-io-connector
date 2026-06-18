@@ -279,7 +279,7 @@ class MessageServiceTest {
 
     @Test
     void handleSendRequest_setsPollingMaxDateInSqsMessage() throws Exception {
-        MessageRequest request = buildRequest().pollingMaxHours(24);
+        MessageRequest request = buildRequest().pollingMaxMins(1440);
 
         messageService.handleSendRequest("pn-delivery-push", request);
 
@@ -289,8 +289,8 @@ class MessageServiceTest {
     }
 
     @Test
-    void handleSendRequest_withoutPollingMaxHours_usesConfigDefault() throws Exception {
-        when(config.getPollingIntervalHours()).thenReturn(24);
+    void handleSendRequest_withoutPollingMaxMins_usesConfigDefault() throws Exception {
+        when(config.getPollingIntervalMins()).thenReturn(1440);
         MessageRequest request = buildRequest();
 
         Instant before = Instant.now();
@@ -300,7 +300,7 @@ class MessageServiceTest {
         ArgumentCaptor<MessageSendRequest> sqsMsgCaptor = ArgumentCaptor.forClass(MessageSendRequest.class);
         verify(objectMapper).writeValueAsString(sqsMsgCaptor.capture());
         assertThat(sqsMsgCaptor.getValue().getPollingMaxDate())
-                .isBetween(before.plus(24, ChronoUnit.HOURS), after.plus(24, ChronoUnit.HOURS));
+                .isBetween(before.plus(1440, ChronoUnit.MINUTES), after.plus(1440, ChronoUnit.MINUTES));
     }
 
     private MessageRequest buildRequest() {
