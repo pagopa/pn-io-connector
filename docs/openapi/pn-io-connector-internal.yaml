@@ -189,12 +189,12 @@ components:
           example: 2022-09-30T22:00:00Z
         paymentData:
           $ref: '#/components/schemas/PaymentData'
-        pollingMaxHours:
+        pollingMaxMins:
           type: integer
           description: >
-            Numero massimo di ore per cui effettuare il polling degli esiti.
-            Se non valorizzato viene utilizzato il default configurato nella 
-            property pn.io-connector.polling-interval-hours.
+            Numero massimo di minuti per cui effettuare il polling degli esiti.
+            Se non valorizzato viene utilizzato il default configurato nella
+            property pn.io-connector.polling-interval-mins.
           nullable: true
 
     Attachment:
@@ -202,6 +202,7 @@ components:
       required:
         - id
         - fileKey
+        - name
       properties:
         id:
           type: string
@@ -209,6 +210,10 @@ components:
         fileKey:
           type: string
           description: Chiave del file allegato (deve avere estensione .pdf).
+        name:
+          type: string
+          maxLength: 127
+          description: Nome allegato con desinenza ".pdf" obbligatoria.
 
     PaymentData:
       type: object

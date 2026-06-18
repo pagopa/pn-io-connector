@@ -61,7 +61,7 @@ public class MessageService {
                 }
             }
 
-            long pollingMaxHours = request.getPollingMaxHours() != null ? request.getPollingMaxHours() : config.getPollingIntervalHours();
+            long pollingMaxMins = request.getPollingMaxMins() != null ? request.getPollingMaxMins() : config.getPollingIntervalMins();
             MessageSendRequest sqsMsg = MessageSendRequest.builder()
                 .requestId(request.getRequestId())
                 .xPagopaIoConCxId(cxId)
@@ -75,6 +75,7 @@ public class MessageService {
                         .map(a -> MessageSendRequest.Attachment.builder()
                             .id(a.getId())
                             .fileKey(a.getFileKey())
+                            .name(a.getName())
                             .build())
                         .collect(Collectors.toList())
                     : null)
@@ -88,7 +89,7 @@ public class MessageService {
                         creditorTaxId(request.getPaymentData().getCreditorTaxId()).
                         invalidAfterDueDate(request.getPaymentData().getInvalidAfterDueDate()).
                         build() : null)
-                .pollingMaxDate(Instant.now().plus(pollingMaxHours, ChronoUnit.HOURS))
+                .pollingMaxDate(Instant.now().plus(pollingMaxMins, ChronoUnit.MINUTES))
                 .createdAt(Instant.now())
                 .build();
 
@@ -143,7 +144,8 @@ public class MessageService {
             Attachment req = requestAttachments.get(i);
             IOConnectorRequestEntity.Attachment ent = entityAttachments.get(i);
             if (!Objects.equals(req.getId(), ent.getId())
-                    || !Objects.equals(req.getFileKey(), ent.getFileKey())) {
+                    || !Objects.equals(req.getFileKey(), ent.getFileKey())
+                    || !Objects.equals(req.getName(), ent.getName())) {
                 return false;
             }
         }
@@ -182,6 +184,7 @@ public class MessageService {
                         .map(a -> IOConnectorRequestEntity.Attachment.builder()
                             .id(a.getId())
                             .fileKey(a.getFileKey())
+                            .name(a.getName())
                             .build())
                         .collect(Collectors.toList())
                     : null)

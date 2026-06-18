@@ -1,14 +1,13 @@
 package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ExternalMessageResponseWithContent;
-import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.MessageContent;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.PaymentData;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOClient;
 import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
-import it.pagopa.pn.ioconnector.model.OutcomeEvent;
+import it.pagopa.pn.ioconnector.model.io.MessageStatusValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -17,9 +16,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -76,53 +75,96 @@ class IOServiceTest {
     }
 
     @Test
-    void getMessageStatus_returnsNull_whenClientReturnsNull() {
+    void getReachedEventTypes_emptyWhenClientReturnsNull() {
         when(ioClient.getMessageStatus(any(), any(), any())).thenReturn(null);
 
-        OutcomeEvent result = ioService.getMessageStatus("REQ-001", "CX-001",
-                "RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
+        Set<EventType> result = ioService.getReachedEventTypes("RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
 
-        assertThat(result).isNull();
+        assertThat(result).isEmpty();
     }
 
     @Test
-    void getMessageStatus_mapsToDeliveredToUser_whenNoReadOrPaymentStatus() {
+    void getReachedEventTypes_emptyWhenNotYetDelivered() {
         var response = new ExternalMessageResponseWithContent();
+        response.setStatus(MessageStatusValue.THROTTLED);
         when(ioClient.getMessageStatus("RSSMRA80A01H501U", "IO-MSG-001", API_KEY)).thenReturn(response);
 
-        OutcomeEvent result = ioService.getMessageStatus("REQ-001", "CX-001",
-                "RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
+        Set<EventType> result = ioService.getReachedEventTypes("RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
 
-        assertThat(result.getEventType()).isEqualTo(EventType.DELIVERED_TO_USER);
-        assertThat(result.getRequestId()).isEqualTo("REQ-001");
-        assertThat(result.getXPagopaIoConCxId()).isEqualTo("CX-001");
-        assertThat(result.getIoMessageId()).isEqualTo("IO-MSG-001");
-        assertThat(result.getEventTimestamp()).isNotNull();
+        assertThat(result).isEmpty();
     }
 
     @Test
-    void getMessageStatus_mapsToRead_whenReadStatusIsRead() {
+    void getReachedEventTypes_deliveredWhenProcessed() {
         var response = new ExternalMessageResponseWithContent();
+        response.setStatus(MessageStatusValue.PROCESSED);
+        when(ioClient.getMessageStatus(any(), any(), any())).thenReturn(response);
+
+        Set<EventType> result = ioService.getReachedEventTypes("RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
+
+        assertThat(result).containsExactly(EventType.DELIVERED_TO_USER);
+    }
+
+    @Test
+    void getReachedEventTypes_readImpliesDelivered() {
+        var response = new ExternalMessageResponseWithContent();
+        response.setStatus(MessageStatusValue.PROCESSED);
         response.setReadStatus("READ");
         when(ioClient.getMessageStatus(any(), any(), any())).thenReturn(response);
 
-        OutcomeEvent result = ioService.getMessageStatus("REQ-001", "CX-001",
-                "RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
+        Set<EventType> result = ioService.getReachedEventTypes("RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
 
-        assertThat(result.getEventType()).isEqualTo(EventType.READ);
+        assertThat(result).containsExactlyInAnyOrder(EventType.DELIVERED_TO_USER, EventType.READ);
     }
 
     @Test
-    void getMessageStatus_mapsToPaid_whenPaymentStatusIsPaid() {
+    void getReachedEventTypes_paidWithoutRead_doesNotIncludeRead() {
         var response = new ExternalMessageResponseWithContent();
+        response.setStatus(MessageStatusValue.PROCESSED);
+        response.setReadStatus("UNREAD");
         response.setPaymentStatus("PAID");
-        response.setReadStatus("READ");
         when(ioClient.getMessageStatus(any(), any(), any())).thenReturn(response);
 
-        OutcomeEvent result = ioService.getMessageStatus("REQ-001", "CX-001",
-                "RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
+        Set<EventType> result = ioService.getReachedEventTypes("RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
 
-        assertThat(result.getEventType()).isEqualTo(EventType.PAID);
+        assertThat(result).containsExactlyInAnyOrder(EventType.DELIVERED_TO_USER, EventType.PAID);
+        assertThat(result).doesNotContain(EventType.READ);
+    }
+
+    @Test
+    void getReachedEventTypes_allThreeWhenProcessedReadPaid() {
+        var response = new ExternalMessageResponseWithContent();
+        response.setStatus(MessageStatusValue.PROCESSED);
+        response.setReadStatus("READ");
+        response.setPaymentStatus("PAID");
+        when(ioClient.getMessageStatus(any(), any(), any())).thenReturn(response);
+
+        Set<EventType> result = ioService.getReachedEventTypes("RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
+
+        assertThat(result).containsExactlyInAnyOrder(
+                EventType.DELIVERED_TO_USER, EventType.READ, EventType.PAID);
+    }
+
+    @Test
+    void getReachedEventTypes_failedMapsToDeliveryFailed() {
+        var response = new ExternalMessageResponseWithContent();
+        response.setStatus(MessageStatusValue.FAILED);
+        when(ioClient.getMessageStatus(any(), any(), any())).thenReturn(response);
+
+        Set<EventType> result = ioService.getReachedEventTypes("RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
+
+        assertThat(result).containsExactly(EventType.IO_DELIVERY_FAILED);
+    }
+
+    @Test
+    void getReachedEventTypes_rejectedMapsToDeliveryFailed() {
+        var response = new ExternalMessageResponseWithContent();
+        response.setStatus(MessageStatusValue.REJECTED);
+        when(ioClient.getMessageStatus(any(), any(), any())).thenReturn(response);
+
+        Set<EventType> result = ioService.getReachedEventTypes("RSSMRA80A01H501U", "IO-MSG-001", API_KEY);
+
+        assertThat(result).containsExactly(EventType.IO_DELIVERY_FAILED);
     }
 
     @Test

@@ -22,6 +22,7 @@ import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.Message;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
@@ -55,7 +56,7 @@ public class SendWorker {
 
         String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
 
-        if (!isAttachmentFormatValid(request)) {
+        if (!isAttachmentFormatValid(request) || !hasUniqueAttachmentIds(request)) {
             handleInvalidAttachmentFormat(request);
             acknowledgement.acknowledge();
             return;
@@ -134,13 +135,13 @@ public class SendWorker {
         Instant now = Instant.now();
         Instant pollingMaxDate = request.getPollingMaxDate() != null
                 ? request.getPollingMaxDate()
-                : now.plus(Duration.ofHours(config.getPollingIntervalHours()));
+                : now.plus(Duration.ofMinutes(config.getPollingIntervalMins()));
         long pollingIntervalSeconds;
         if (config.getPollingFixedIntervalSeconds() != null && config.getPollingFixedIntervalSeconds() > 0) {
             pollingIntervalSeconds = config.getPollingFixedIntervalSeconds();
         } else {
             long windowSeconds = Duration.between(now, pollingMaxDate).getSeconds();
-            pollingIntervalSeconds = Math.max(900, Math.min(21600, windowSeconds / 4));
+            pollingIntervalSeconds = Math.max(30, Math.min(21600, windowSeconds / 4));
         }
 
         OutcomePollingRequest pollingRequest = OutcomePollingRequest.builder()
@@ -189,7 +190,18 @@ public class SendWorker {
         if (request.getAttachments() == null || request.getAttachments().isEmpty()) return true;
         return request.getAttachments().stream()
                 .allMatch(a -> a.getFileKey() != null
-                        && a.getFileKey().toLowerCase(Locale.ROOT).endsWith(".pdf"));
+                        && a.getFileKey().toLowerCase(Locale.ROOT).endsWith(".pdf")
+                        && a.getName() != null
+                        && a.getName().toLowerCase(Locale.ROOT).endsWith(".pdf"));
+    }
+
+    private boolean hasUniqueAttachmentIds(MessageSendRequest request) {
+        if (request.getAttachments() == null || request.getAttachments().isEmpty()) return true;
+        List<String> ids = request.getAttachments().stream()
+                .map(MessageSendRequest.Attachment::getId)
+                .toList();
+        if (ids.stream().anyMatch(id -> !StringUtils.hasText(id))) return false;
+        return ids.stream().distinct().count() == ids.size();
     }
 
     private void handleInvalidAttachmentFormat(MessageSendRequest request) {

@@ -170,6 +170,50 @@ class MessageServiceTest {
         assertThat(messageService.handleSendRequest("pn-delivery-push", request)).isEmpty();
     }
 
+    @Test
+    void handleSendRequest_mapsAttachmentNameToSqsAndEntity() throws Exception {
+        MessageRequest request = buildRequest()
+                .attachments(List.of(
+                        new Attachment().id("att-1").fileKey("key1.pdf").name("documento.pdf")));
+
+        messageService.handleSendRequest("pn-delivery-push", request);
+
+        ArgumentCaptor<MessageSendRequest> sqsMsgCaptor = ArgumentCaptor.forClass(MessageSendRequest.class);
+        verify(objectMapper).writeValueAsString(sqsMsgCaptor.capture());
+        assertThat(sqsMsgCaptor.getValue().getAttachments()).hasSize(1);
+        assertThat(sqsMsgCaptor.getValue().getAttachments().get(0).getName()).isEqualTo("documento.pdf");
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(requestDao).save(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getAttachments()).hasSize(1);
+        assertThat(entityCaptor.getValue().getAttachments().get(0).getName()).isEqualTo("documento.pdf");
+    }
+
+    @Test
+    void handleSendRequest_duplicateWithDifferentAttachmentName_throws409() {
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .xPagopaIoConCxId("pn-delivery-push")
+                .iun("IUN-001")
+                .recipientTaxId("ANON-TAX")
+                .senderServiceId("SVC-001")
+                .subject("Test")
+                .markdown("body")
+                .attachments(List.of(
+                        IOConnectorRequestEntity.Attachment.builder().id("att-1").fileKey("key1").name("nome-A.pdf").build()))
+                .status("ACCEPTED")
+                .build();
+        when(requestDao.findByIdConsistentRead("REQ-001")).thenReturn(Optional.of(existing));
+
+        MessageRequest request = buildRequest()
+                .attachments(List.of(
+                        new Attachment().id("att-1").fileKey("key1").name("nome-B.pdf")));
+
+        assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", request))
+                .isInstanceOf(PnRuntimeException.class)
+                .satisfies(ex -> assertThat(((PnRuntimeException) ex).getStatus()).isEqualTo(409));
+    }
+
 
     @Test
     void handleSendRequest_duplicateWithDifferentInvalidAfterDueDate_throws409() {
@@ -235,7 +279,7 @@ class MessageServiceTest {
 
     @Test
     void handleSendRequest_setsPollingMaxDateInSqsMessage() throws Exception {
-        MessageRequest request = buildRequest().pollingMaxHours(24);
+        MessageRequest request = buildRequest().pollingMaxMins(1440);
 
         messageService.handleSendRequest("pn-delivery-push", request);
 
@@ -245,8 +289,8 @@ class MessageServiceTest {
     }
 
     @Test
-    void handleSendRequest_withoutPollingMaxHours_usesConfigDefault() throws Exception {
-        when(config.getPollingIntervalHours()).thenReturn(24);
+    void handleSendRequest_withoutPollingMaxMins_usesConfigDefault() throws Exception {
+        when(config.getPollingIntervalMins()).thenReturn(1440);
         MessageRequest request = buildRequest();
 
         Instant before = Instant.now();
@@ -256,7 +300,7 @@ class MessageServiceTest {
         ArgumentCaptor<MessageSendRequest> sqsMsgCaptor = ArgumentCaptor.forClass(MessageSendRequest.class);
         verify(objectMapper).writeValueAsString(sqsMsgCaptor.capture());
         assertThat(sqsMsgCaptor.getValue().getPollingMaxDate())
-                .isBetween(before.plus(24, ChronoUnit.HOURS), after.plus(24, ChronoUnit.HOURS));
+                .isBetween(before.plus(1440, ChronoUnit.MINUTES), after.plus(1440, ChronoUnit.MINUTES));
     }
 
     private MessageRequest buildRequest() {
