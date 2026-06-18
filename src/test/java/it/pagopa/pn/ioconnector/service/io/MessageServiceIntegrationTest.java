@@ -51,7 +51,7 @@ class MessageServiceIntegrationTest {
                 .senderServiceId("SVC-INT-001")
                 .subject("Integration Test Subject")
                 .markdown("Integration test body")
-                .pollingMaxHours(24);
+                .pollingMaxMins(24);
 
         Optional<MessageResponse> result = messageService.handleSendRequest("pn-delivery-push", request);
 
@@ -89,7 +89,7 @@ class MessageServiceIntegrationTest {
                 .senderServiceId("SVC-IDEM-001")
                 .subject("Idempotent Subject")
                 .markdown("Idempotent body")
-                .pollingMaxHours(24);
+                .pollingMaxMins(24);
 
         messageService.handleSendRequest("pn-delivery-push", request);
 
@@ -107,7 +107,7 @@ class MessageServiceIntegrationTest {
                 .senderServiceId("SVC-CONF-001")
                 .subject("Original Subject")
                 .markdown("Original body")
-                .pollingMaxHours(24);
+                .pollingMaxMins(24);
 
         messageService.handleSendRequest("pn-delivery-push", firstRequest);
 
@@ -118,7 +118,7 @@ class MessageServiceIntegrationTest {
                 .senderServiceId("SVC-CONF-001")
                 .subject("Different Subject")
                 .markdown("Original body")
-                .pollingMaxHours(24);
+                .pollingMaxMins(24);
 
         assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", conflictingRequest))
                 .isInstanceOf(PnRuntimeException.class)
