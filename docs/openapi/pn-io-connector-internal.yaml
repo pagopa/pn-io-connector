@@ -317,6 +317,36 @@ components:
                 type: string
                 description: Categoria dell'allegato. Deve essere "DOCUMENT".
                 default: DOCUMENT
+
+    OutcomeEvent:
+      type: object
+      description: >
+        SENT_TO_IO = messaggio inviato a IO;
+        DELIVERED_TO_USER = messaggio consegnato all'utente;
+        READ = messaggio letto;
+        PAID = avviso pagato;
+        SENDER_NOT_ALLOWED = destinatario non raggiungibile / mittente non abilitato.
+      properties:
+        xPagopaIoConCxId:
+          type: string
+        requestId:
+          type: string
+        ioMessageId:
+          type: string
+          nullable: true
+        noticeCode:
+          type: string
+          description: Codice avviso pagoPA.
+          example: "302000100440009424"
+          nullable: true
+        eventType:
+          type: string
+          enum: [SENT_TO_IO, DELIVERED_TO_USER, READ, PAID, SENDER_NOT_ALLOWED]
+        eventTimestamp:
+          type: string
+          format: date-time
+          description: Timestamp di generazione dell'evento
+          example: "2026-06-26T10:15:30Z"
     ProblemDetail:
       type: object
       properties:
