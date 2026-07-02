@@ -45,7 +45,7 @@ public class EventBridgeProducer {
         PutEventsRequest putEventsRequest = PutEventsRequest.builder()
                 .entries(entry)
                 .build();
-        log.debug("Publishing to event bridge with PutEventsRequestEntry ↓\n{}", entry);
+        log.info("Publishing to event bridge with PutEventsRequestEntry ↓\n{}", entry);
         eventBridgeClient.putEvents(putEventsRequest);
     }
 }
