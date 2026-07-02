@@ -126,7 +126,6 @@ public class SendWorker {
                     .eventTimestamp(Instant.now())
                     .build();
             eventBridgeProducer.publish(outcomeEvent);
-            log.info("Published Outcome event {}", outcomeEvent);
         }
 
         publishPollingRequest(request, ioMessageId);

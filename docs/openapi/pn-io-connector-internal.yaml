@@ -321,11 +321,8 @@ components:
     OutcomeEvent:
       type: object
       description: >
-        SENT_TO_IO = messaggio inviato a IO;
-        DELIVERED_TO_USER = messaggio consegnato all'utente;
-        READ = messaggio letto;
-        PAID = avviso pagato;
-        SENDER_NOT_ALLOWED = destinatario non raggiungibile / mittente non abilitato.
+        Contenuto del campo "detail" dell'evento pubblicato su EventBridge
+        (source = "pn-io-connector", detail-type = "IoConnectorOutcomeEvent").
       properties:
         xPagopaIoConCxId:
           type: string
@@ -341,6 +338,12 @@ components:
           nullable: true
         eventType:
           type: string
+          description: >
+            SENT_TO_IO = messaggio inviato a IO;
+            DELIVERED_TO_USER = messaggio consegnato all'utente;
+            READ = messaggio letto;
+            PAID = avviso pagato;
+            SENDER_NOT_ALLOWED = destinatario non raggiungibile / mittente non abilitato.
           enum: [SENT_TO_IO, DELIVERED_TO_USER, READ, PAID, SENDER_NOT_ALLOWED]
         eventTimestamp:
           type: string

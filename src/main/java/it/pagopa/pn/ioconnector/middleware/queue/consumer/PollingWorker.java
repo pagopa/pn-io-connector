@@ -105,16 +105,15 @@ public class PollingWorker {
         String nowStr = now.toString();
         for (EventType ev : newEvents) {
             if (ev.isNotify()) {
-                OutcomeEvent outcomeEvent = OutcomeEvent.builder()
+                eventBridgeProducer.publish(OutcomeEvent.builder()
                         .requestId(request.getRequestId())
                         .xPagopaIoConCxId(request.getXPagopaIoConCxId())
                         .ioMessageId(request.getIoMessageId())
                         .noticeCode(request.getNoticeCode())
                         .eventType(ev)
                         .eventTimestamp(now)
-                        .build();
-                eventBridgeProducer.publish(outcomeEvent);
-                log.info("Published Outcome event {}", outcomeEvent);
+                        .build()
+                );
             }
             allEvents.add(IOConnectorRequestEntity.Event.builder()
                     .eventDate(nowStr)
