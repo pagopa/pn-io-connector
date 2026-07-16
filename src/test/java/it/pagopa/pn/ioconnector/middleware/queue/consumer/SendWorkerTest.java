@@ -114,6 +114,7 @@ class SendWorkerTest {
         ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
         verify(eventBridgeProducer).publish(outcomeCaptor.capture());
         assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.SENT_TO_IO);
+        assertThat(outcomeCaptor.getValue().getNoticeCode()).isNull();
 
         ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
         verify(sqsClient).sendMessage(sqsCaptor.capture());
@@ -122,6 +123,7 @@ class SendWorkerTest {
         assertThat(pollingRequest.getLastKnownStatus()).isEqualTo(EventType.SENT_TO_IO);
         assertThat(pollingRequest.getAttemptCount()).isEqualTo(0);
         assertThat(pollingRequest.getSenderServiceId()).isEqualTo("SVC-001");
+        assertThat(pollingRequest.getNoticeCode()).isNull();
         verify(acknowledgement).acknowledge();
     }
 
@@ -169,12 +171,18 @@ class SendWorkerTest {
 
         sendWorker.process(message, acknowledgement);
 
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.SENT_TO_IO);
+        assertThat(outcomeCaptor.getValue().getNoticeCode()).isEqualTo("302000000000000000");
+
         ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
         verify(sqsClient).sendMessage(sqsCaptor.capture());
         OutcomePollingRequest pollingRequest = objectMapper.readValue(
                 sqsCaptor.getValue().messageBody(), OutcomePollingRequest.class);
         assertThat(pollingRequest.isPaymentData()).isTrue();
         assertThat(pollingRequest.getSenderServiceId()).isEqualTo("SVC-001");
+        assertThat(pollingRequest.getNoticeCode()).isEqualTo("302000000000000000");
         verify(acknowledgement).acknowledge();
     }
 

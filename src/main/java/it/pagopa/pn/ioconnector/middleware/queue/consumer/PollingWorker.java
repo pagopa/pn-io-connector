@@ -109,9 +109,11 @@ public class PollingWorker {
                         .requestId(request.getRequestId())
                         .xPagopaIoConCxId(request.getXPagopaIoConCxId())
                         .ioMessageId(request.getIoMessageId())
+                        .noticeCode(request.getNoticeCode())
                         .eventType(ev)
                         .eventTimestamp(now)
-                        .build());
+                        .build()
+                );
             }
             allEvents.add(IOConnectorRequestEntity.Event.builder()
                     .eventDate(nowStr)
@@ -189,6 +191,7 @@ public class PollingWorker {
                 .ioMessageId(request.getIoMessageId())
                 .senderServiceId(request.getSenderServiceId())
                 .paymentData(request.isPaymentData())
+                .noticeCode(request.getNoticeCode())
                 .lastKnownStatus(lastKnownStatus)
                 .pollingMaxDate(request.getPollingMaxDate())
                 .pollingIntervalSeconds(request.getPollingIntervalSeconds())

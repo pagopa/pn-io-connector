@@ -21,6 +21,8 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class EventBridgeProducer {
 
+    private static final String OUTCOME_EVENT_DETAIL_TYPE = "IoConnectorOutcomeEvent";
+
     private final EventBridgeClient eventBridgeClient;
     private final PnIoConnectorConfig config;
     private final ObjectMapper objectMapper;
@@ -36,13 +38,16 @@ public class EventBridgeProducer {
         PutEventsRequestEntry entry = PutEventsRequestEntry.builder()
                 .eventBusName(config.getEventBridgeBusName())
                 .source("pn-io-connector")
-                .detailType(event.getEventType() != null ? event.getEventType().name() : "UNKNOWN")
+                .detailType(OUTCOME_EVENT_DETAIL_TYPE)
                 .detail(detail)
                 .time(eventTime)
                 .build();
         PutEventsRequest putEventsRequest = PutEventsRequest.builder()
                 .entries(entry)
                 .build();
+        log.info("Publishing to EventBridge bus={} source={} detailType={} requestId={} eventType={}",
+                entry.eventBusName(), entry.source(), entry.detailType(),
+                event.getRequestId(), event.getEventType());
         eventBridgeClient.putEvents(putEventsRequest);
     }
 }

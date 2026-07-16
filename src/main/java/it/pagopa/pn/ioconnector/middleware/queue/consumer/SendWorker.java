@@ -121,6 +121,7 @@ public class SendWorker {
                     .requestId(request.getRequestId())
                     .xPagopaIoConCxId(request.getXPagopaIoConCxId())
                     .ioMessageId(ioMessageId)
+                    .noticeCode(extractNoticeCode(request))
                     .eventType(EventType.SENT_TO_IO)
                     .eventTimestamp(Instant.now())
                     .build();
@@ -152,6 +153,7 @@ public class SendWorker {
                 .ioMessageId(ioMessageId)
                 .senderServiceId(request.getSenderServiceId())
                 .paymentData(request.getPaymentData() != null)
+                .noticeCode(extractNoticeCode(request))
                 .lastKnownStatus(EventType.SENT_TO_IO)
                 .pollingMaxDate(pollingMaxDate)
                 .pollingIntervalSeconds(pollingIntervalSeconds)
@@ -172,6 +174,10 @@ public class SendWorker {
         } catch (JsonProcessingException e) {
             throw new PnInternalException("Failed to serialize OutcomePollingRequest", ERROR_CODE_PN_GENERIC_ERROR, e);
         }
+    }
+
+    private String extractNoticeCode(MessageSendRequest request) {
+        return request.getPaymentData() != null ? request.getPaymentData().getNoticeCode() : null;
     }
 
     private List<IOConnectorRequestEntity.Event> appendEvent(String requestId, EventType eventType) {
@@ -216,6 +222,7 @@ public class SendWorker {
             OutcomeEvent outcomeEvent = OutcomeEvent.builder()
                     .requestId(request.getRequestId())
                     .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                    .noticeCode(extractNoticeCode(request))
                     .eventType(EventType.ATTACHMENTS_VALIDATION_FAILED)
                     .eventTimestamp(Instant.now())
                     .build();
@@ -246,6 +253,7 @@ public class SendWorker {
         OutcomeEvent outcomeEvent = OutcomeEvent.builder()
                 .requestId(request.getRequestId())
                 .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                .noticeCode(extractNoticeCode(request))
                 .eventType(EventType.SENDER_NOT_ALLOWED)
                 .eventTimestamp(Instant.now())
                 .build();

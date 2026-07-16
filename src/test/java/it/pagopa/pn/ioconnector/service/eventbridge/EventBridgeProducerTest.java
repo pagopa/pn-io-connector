@@ -57,5 +57,6 @@ class EventBridgeProducerTest {
         assertThat(detail).contains("REQ-001");
         assertThat(detail).contains("SENT_TO_IO");
         assertThat(request.entries().get(0).eventBusName()).isEqualTo("pn-io-connector-bus");
+        assertThat(request.entries().get(0).detailType()).isEqualTo("IoConnectorOutcomeEvent");
     }
 }

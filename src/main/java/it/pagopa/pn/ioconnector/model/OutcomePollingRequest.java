@@ -20,6 +20,7 @@ public class OutcomePollingRequest {
     private String ioMessageId;
     private String senderServiceId;
     private boolean paymentData;
+    private String noticeCode;
     private EventType lastKnownStatus;
     private Instant pollingMaxDate;
     private long pollingIntervalSeconds;
