@@ -156,7 +156,10 @@ class PollingWorkerTest {
 
         pollingWorker.process(message, acknowledgement);
 
-        verify(sqsClient).sendMessage(any(SendMessageRequest.class));
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(sqsClient).sendMessage(sqsCaptor.capture());
+        OutcomePollingRequest requeued = readRequeued(sqsCaptor.getValue());
+        assertThat(requeued.getNoticeCode()).isEqualTo("302000000000000000");
         verify(eventBridgeProducer, never()).publish(any());
         verify(dao, never()).update(any());
         verify(acknowledgement).acknowledge();
@@ -198,12 +201,16 @@ class PollingWorkerTest {
         ArgumentCaptor<OutcomeEvent> eventCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
         verify(eventBridgeProducer).publish(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.DELIVERED_TO_USER);
+        assertThat(eventCaptor.getValue().getNoticeCode()).isEqualTo("302000000000000000");
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.DELIVERED_TO_USER.name());
 
-        verify(sqsClient).sendMessage(any(SendMessageRequest.class));
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(sqsClient).sendMessage(sqsCaptor.capture());
+        OutcomePollingRequest requeued = readRequeued(sqsCaptor.getValue());
+        assertThat(requeued.getNoticeCode()).isEqualTo("302000000000000000");
         verify(acknowledgement).acknowledge();
     }
 
@@ -290,6 +297,7 @@ class PollingWorkerTest {
                 sqsCaptor.getValue().messageBody(), OutcomePollingRequest.class);
         assertThat(requeued.getAttemptCount()).isEqualTo(3);
         assertThat(requeued.getLastKnownStatus()).isEqualTo(EventType.DELIVERED_TO_USER);
+        assertThat(requeued.getNoticeCode()).isEqualTo("302000000000000000");
         verify(acknowledgement).acknowledge();
     }
 
@@ -537,6 +545,7 @@ class PollingWorkerTest {
                 .ioMessageId("IO-MSG-001")
                 .senderServiceId("SVC-001")
                 .paymentData(paymentData)
+                .noticeCode("302000000000000000")
                 .lastKnownStatus(lastKnownStatus)
                 .pollingMaxDate(pollingMaxDate)
                 .pollingIntervalSeconds(pollingIntervalSeconds)
