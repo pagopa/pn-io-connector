@@ -5,6 +5,7 @@
     "PnCommonsConnectionTimeoutMillis":"10000",
     "PnCommonsReadTimeoutMillis":"30000",
     "DownloadModeRedirect": "false",
-    "SafeStorageGetFilePath": "/safe-storage/v1/files"
+    "SafeStorageGetFilePath": "/safe-storage/v1/files",
+    "PnIoConnectorIoBaseUrl": "http://internal-EcsA-20230409091221502000000003-2047636771.eu-south-1.elb.amazonaws.com:8080/api/v1"
   }
 }

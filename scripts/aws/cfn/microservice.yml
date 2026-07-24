@@ -209,6 +209,11 @@ Parameters:
     Default: 'http://alb.confidential.pn.internal:8080'
     Description: 'Base URL of pn-data-vault internal service'
 
+  PnIoConnectorIoBaseUrl:
+    Type: String
+    Default: 'https://api.io.pagopa.it/api/v1'
+    Description: 'Base URL of Backend IO. In test environments points to the Lambda router, in production the real IO API.'
+
   PnIoConnectorPollingQueueName:
     Type: String
     Description: 'Name of SQS queue pn-io-connector-polling-queue (from storage.yml output)'
@@ -287,6 +292,7 @@ Resources:
         ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
         ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${ProjectName}-CoreEventBus'
         ContainerEnvEntry12: !Sub 'PN_IO_CONNECTOR_SQS_POLLING_QUEUE_NAME=${PnIoConnectorPollingQueueName}'
+        ContainerEnvEntry13: !Sub 'PN_IO_CONNECTOR_IO_BASE_URL=${PnIoConnectorIoBaseUrl}'
         MappedPaths: '/io-connector/message*,/io-connector/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
