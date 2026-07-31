@@ -14,6 +14,7 @@ public enum EventType {
     PAID(true, 50),
     IO_DELIVERY_FAILED(false, 60),
     SENDER_NOT_ALLOWED(true, 0),
+    FAILED_TO_SEND(true, 0),
     POLLING_EXHAUSTED(false, 0),
     IO_SEND_RETRY_EXHAUSTED(false, 0),
     ATTACHMENTS_VALIDATION_FAILED(false, 0);

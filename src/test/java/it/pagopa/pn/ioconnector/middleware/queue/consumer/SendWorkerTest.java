@@ -297,7 +297,7 @@ class SendWorkerTest {
     }
 
     @Test
-    void sendMessage_nonRetryableError_404_propagatesExceptionWithoutVisibilityChange() {
+    void sendMessage_nonRetryableError_404_marksFailedToSendAndAcksMessage() {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
 
@@ -309,14 +309,22 @@ class SendWorkerTest {
         when(ioService.sendMessage(eq(request), eq("api-key")))
                 .thenThrow(new PnHttpResponseException("Not Found", 404));
 
-        assertThatThrownBy(() -> sendWorker.process(message, acknowledgement))
-                .isInstanceOf(PnHttpResponseException.class)
-                .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(404));
+        sendWorker.process(message, acknowledgement);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+        assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
+        assertThat(entityCaptor.getValue().getEventList().get(0).getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
+        assertThat(outcomeCaptor.getValue().getRequestId()).isEqualTo("REQ-001");
+        assertThat(outcomeCaptor.getValue().getXPagopaIoConCxId()).isEqualTo("pn-delivery-push");
 
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
-        verify(dao, never()).update(any());
-        verify(eventBridgeProducer, never()).publish(any());
-        verify(acknowledgement, never()).acknowledge();
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
@@ -593,7 +601,7 @@ class SendWorkerTest {
     }
 
     @Test
-    void deanonymize_nonRetryableError_400_propagatesException() {
+    void deanonymize_nonRetryableError_400_marksFailedToSendAndAcksMessage() {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
 
@@ -601,11 +609,120 @@ class SendWorkerTest {
         when(dataVaultService.deanonymize(TOKEN_TAX_ID))
                 .thenThrow(new PnDataVaultException(400, "Bad Request"));
 
-        assertThatThrownBy(() -> sendWorker.process(message, acknowledgement))
-                .isInstanceOf(PnDataVaultException.class);
+        sendWorker.process(message, acknowledgement);
 
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+        assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
+        assertThat(entityCaptor.getValue().getEventList().get(0).getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
+        assertThat(outcomeCaptor.getValue().getRequestId()).isEqualTo("REQ-001");
+
+        verify(ioService, never()).checkUserProfile(any(), any());
+        verify(ioService, never()).sendMessage(any(), any());
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
-        verify(dao, never()).update(any());
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void checkUserProfile_nonRetryableError_403_marksFailedToSend() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key"))
+                .thenThrow(new PnHttpResponseException("Forbidden", 403));
+
+        sendWorker.process(message, acknowledgement);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getRequestId()).isEqualTo("REQ-001");
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+        assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
+        assertThat(entityCaptor.getValue().getEventList().get(0).getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
+
+        verify(ioService, never()).sendMessage(any(), any());
+        verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void sendMessage_nonRetryableError_400_marksFailedToSend_withNoticeCode() {
+        MessageSendRequest request = buildRequest();
+        request.setPaymentData(MessageSendRequest.PaymentData.builder()
+                .amount(100)
+                .noticeCode("302000000000000000")
+                .creditorTaxId("77777777777")
+                .build());
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        LimitedProfile profile = new LimitedProfile();
+        profile.setSenderAllowed(true);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new PnHttpResponseException("Bad Request", 400));
+
+        sendWorker.process(message, acknowledgement);
+
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
+        assertThat(outcomeCaptor.getValue().getNoticeCode()).isEqualTo("302000000000000000");
+        assertThat(outcomeCaptor.getValue().getIoMessageId()).isNull();
+        assertThat(outcomeCaptor.getValue().getEventTimestamp()).isNotNull();
+
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void sendMessage_error_500_isRetryable_doesNotMarkFailedToSend() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        LimitedProfile profile = new LimitedProfile();
+        profile.setSenderAllowed(true);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(profile);
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new PnHttpResponseException("Internal Server Error", 500));
+
+        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .retryStep(null)
+                .build();
+        when(dao.findById(request.getRequestId())).thenReturn(Optional.of(entity));
+        when(config.getSendRetryPolicy()).thenReturn(List.of(5, 10, 20, 40));
+        when(config.getSqsSendQueueName()).thenReturn("pn-io-connector-send-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder()
+                        .queueUrl("https://sqs.us-east-1.amazonaws.com/123456789/pn-io-connector-send-queue")
+                        .build());
+
+        sendWorker.process(message, acknowledgement);
+
+        ArgumentCaptor<ChangeMessageVisibilityRequest> visibilityCaptor =
+                ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
+        verify(sqsClient).changeMessageVisibility(visibilityCaptor.capture());
+        assertThat(visibilityCaptor.getValue().visibilityTimeout()).isEqualTo(300);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getRetryStep()).isEqualTo(1);
+        assertThat(entityCaptor.getValue().getStatus()).isNull();
+
         verify(eventBridgeProducer, never()).publish(any());
         verify(acknowledgement, never()).acknowledge();
     }

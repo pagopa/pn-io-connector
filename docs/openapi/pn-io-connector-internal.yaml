@@ -343,8 +343,9 @@ components:
             DELIVERED_TO_USER = messaggio consegnato all'utente;
             READ = messaggio letto;
             PAID = avviso pagato;
-            SENDER_NOT_ALLOWED = destinatario non raggiungibile / mittente non abilitato.
-          enum: [SENT_TO_IO, DELIVERED_TO_USER, READ, PAID, SENDER_NOT_ALLOWED]
+            SENDER_NOT_ALLOWED = destinatario non raggiungibile / mittente non abilitato;
+            FAILED_TO_SEND = errore durante l'invio del messaggio verso IO;
+          enum: [SENT_TO_IO, DELIVERED_TO_USER, READ, PAID, SENDER_NOT_ALLOWED, FAILED_TO_SEND]
         eventTimestamp:
           type: string
           format: date-time

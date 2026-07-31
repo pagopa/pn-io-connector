@@ -6,6 +6,7 @@ import io.awspring.cloud.sqs.annotation.SqsListener;
 import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.commons.exceptions.PnRuntimeException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
@@ -78,7 +79,9 @@ public class SendWorker {
         } catch (PnHttpResponseException | PnDataVaultException ex) {
             int statusCode = ex.getProblem().getStatus();
             if (!isRetryable(statusCode)) {
-                throw ex;
+                handleFailedToSend(request, statusCode, ex);
+                acknowledgement.acknowledge();
+                return;
             }
             IOConnectorRequestEntity entity = dao.findById(request.getRequestId()).orElse(null);
             int currentStep = (entity != null && entity.getRetryStep() != null) ? entity.getRetryStep() : 0;
@@ -261,5 +264,26 @@ public class SendWorker {
 
         log.info("Sender not allowed for requestId={} iun={}",
                 request.getRequestId(), request.getIun());
+    }
+
+    private void handleFailedToSend(MessageSendRequest request, int statusCode, PnRuntimeException ex) {
+        log.error("Error while trying to send message to IO for requestId={} iun={} statusCode={} detail={}",
+                request.getRequestId(), request.getIun(), statusCode, ex.getMessage(), ex);
+        dao.update(IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .status(EventType.FAILED_TO_SEND.name())
+                .eventList(appendEvent(request.getRequestId(), EventType.FAILED_TO_SEND))
+                .build());
+
+        if (EventType.FAILED_TO_SEND.isNotify()) {
+            OutcomeEvent outcomeEvent = OutcomeEvent.builder()
+                    .requestId(request.getRequestId())
+                    .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                    .noticeCode(extractNoticeCode(request))
+                    .eventType(EventType.FAILED_TO_SEND)
+                    .eventTimestamp(Instant.now())
+                    .build();
+            eventBridgeProducer.publish(outcomeEvent);
+        }
     }
 }
