@@ -29,6 +29,9 @@ public class OutcomeEvent {
     @JsonProperty("eventType")
     private EventType eventType;
 
+    @JsonProperty("errorDetail")
+    private String errorDetail;
+
     @JsonProperty("eventTimestamp")
     private Instant eventTimestamp;
 }

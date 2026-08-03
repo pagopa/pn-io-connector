@@ -6,6 +6,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoGetProfileException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
@@ -228,7 +229,7 @@ class SendWorkerTest {
     }
 
     @Test
-    void sendMessage_retryableError_lastAttempt_callsHandleRetryExhausted() {
+    void sendMessage_retryableError_lastAttempt_marksFailedToSendAndPublishesRetryExhausted() {
         MessageSendRequest request = buildRequest();
         Message<MessageSendRequest> message = buildMessage(request);
 
@@ -251,9 +252,15 @@ class SendWorkerTest {
 
         ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
         verify(dao).update(entityCaptor.capture());
-        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.IO_SEND_RETRY_EXHAUSTED.name());
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+        assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
+        assertThat(entityCaptor.getValue().getEventList().get(0).getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
 
-        verify(eventBridgeProducer, never()).publish(any());
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("Retry Exhausted");
+
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
         verify(acknowledgement).acknowledge();
     }
@@ -322,6 +329,7 @@ class SendWorkerTest {
         assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
         assertThat(outcomeCaptor.getValue().getRequestId()).isEqualTo("REQ-001");
         assertThat(outcomeCaptor.getValue().getXPagopaIoConCxId()).isEqualTo("pn-delivery-push");
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("404 - Not Found");
 
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
         verify(acknowledgement).acknowledge();
@@ -621,6 +629,7 @@ class SendWorkerTest {
         verify(eventBridgeProducer).publish(outcomeCaptor.capture());
         assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
         assertThat(outcomeCaptor.getValue().getRequestId()).isEqualTo("REQ-001");
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("400 - Errore chiamata a DataVault");
 
         verify(ioService, never()).checkUserProfile(any(), any());
         verify(ioService, never()).sendMessage(any(), any());
@@ -650,6 +659,35 @@ class SendWorkerTest {
         ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
         verify(eventBridgeProducer).publish(outcomeCaptor.capture());
         assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("403 - Forbidden");
+
+        verify(ioService, never()).sendMessage(any(), any());
+        verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void checkUserProfile_getProfileException_403_marksFailedToSend() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessage(request);
+
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key"))
+                .thenThrow(new PnIoGetProfileException(403, "Forbidden"));
+
+        sendWorker.process(message, acknowledgement);
+
+        ArgumentCaptor<IOConnectorRequestEntity> entityCaptor = ArgumentCaptor.forClass(IOConnectorRequestEntity.class);
+        verify(dao).update(entityCaptor.capture());
+        assertThat(entityCaptor.getValue().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+        assertThat(entityCaptor.getValue().getEventList()).hasSize(1);
+        assertThat(entityCaptor.getValue().getEventList().get(0).getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("403 - Errore in fase di POST/profile su IO");
 
         verify(ioService, never()).sendMessage(any(), any());
         verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
@@ -682,6 +720,7 @@ class SendWorkerTest {
         assertThat(outcomeCaptor.getValue().getNoticeCode()).isEqualTo("302000000000000000");
         assertThat(outcomeCaptor.getValue().getIoMessageId()).isNull();
         assertThat(outcomeCaptor.getValue().getEventTimestamp()).isNotNull();
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("400 - Bad Request");
 
         verify(acknowledgement).acknowledge();
     }

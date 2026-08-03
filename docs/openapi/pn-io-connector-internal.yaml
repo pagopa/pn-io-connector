@@ -346,6 +346,14 @@ components:
             SENDER_NOT_ALLOWED = destinatario non raggiungibile / mittente non abilitato;
             FAILED_TO_SEND = errore durante l'invio del messaggio verso IO;
           enum: [SENT_TO_IO, DELIVERED_TO_USER, READ, PAID, SENDER_NOT_ALLOWED, FAILED_TO_SEND]
+        errorDetail:
+          type: string
+          description: >
+            Causa del fallimento, valorizzato solo per eventType = FAILED_TO_SEND.
+            Per errori di invio non retryable: "<http status> - <descrizione>".
+            Per esaurimento delle retry: "Retry Exhausted".
+          example: "400 - Bad Request"
+          nullable: true
         eventTimestamp:
           type: string
           format: date-time
