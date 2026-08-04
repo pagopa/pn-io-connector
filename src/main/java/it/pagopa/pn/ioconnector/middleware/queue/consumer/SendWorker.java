@@ -22,6 +22,7 @@ import it.pagopa.pn.ioconnector.service.DataVaultService;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.messaging.Message;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -80,7 +81,7 @@ public class SendWorker {
             requestToSend.setRecipientTaxId(taxId);
             ioMessageId = ioService.sendMessage(requestToSend, apiKey);
         } catch (PnHttpResponseException | PnDataVaultException | PnIoGetProfileException ex) {
-            int statusCode = ex.getProblem().getStatus();
+            int statusCode = resolveStatusCode(ex);
             if (!isRetryable(statusCode)) {
                 handleFailedToSend(request, statusCode, ex);
                 acknowledgement.acknowledge();
@@ -269,6 +270,11 @@ public class SendWorker {
         log.error("Error while trying to send message to IO for requestId={} iun={} statusCode={} detail={}",
                 request.getRequestId(), request.getIun(), statusCode, ex.getMessage(), ex);
         markFailedToSend(request, buildErrorDetail(statusCode, ex));
+    }
+
+    private int resolveStatusCode(PnRuntimeException ex) {
+        Integer status = ex.getProblem() != null ? ex.getProblem().getStatus() : null;
+        return status != null ? status : HttpStatus.INTERNAL_SERVER_ERROR.value();
     }
 
     private String buildErrorDetail(int statusCode, PnRuntimeException ex) {
