@@ -43,7 +43,6 @@ public class PnIoConnectorConfig {
     private List<Integer> sendRetryPolicy;
     private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
-    private String ioConfigurationId;
 
     @Bean
     public Map<String, String> apiKeyUseSecrets(SecretsManagerClient secretsManagerClient, ObjectMapper objectMapper) {
