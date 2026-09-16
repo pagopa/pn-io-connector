@@ -33,11 +33,27 @@ class IoServiceConfigurationResolverTest {
     }
 
     @Test
-    void getOrganizationFiscalCode_returnsNull() {
+    void getOrganizationFiscalCode_throwsWhenOrganizationFiscalCodeIsNull() {
         IoServiceConfigurationResolver resolver = new IoServiceConfigurationResolver(
                 Map.of("SVC-001", new IoServiceConfiguration("CONF-001", null)));
 
-        assertThat(resolver.getOrganizationFiscalCode("SVC-001")).isNull();
+        assertThatThrownBy(() -> resolver.getOrganizationFiscalCode("SVC-001"))
+                .isInstanceOfSatisfying(PnInternalException.class, e -> {
+                    assertThat(e.getProblem().getDetail()).contains("SVC-001");
+                    assertThat(e.getProblem().getErrors().get(0).getCode())
+                            .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_MISSING_ORGANIZATION_FISCAL_CODE);
+                });
+    }
+
+    @Test
+    void getOrganizationFiscalCode_throwsWhenOrganizationFiscalCodeIsBlank() {
+        IoServiceConfigurationResolver resolver = new IoServiceConfigurationResolver(
+                Map.of("SVC-001", new IoServiceConfiguration("CONF-001", "  ")));
+
+        assertThatThrownBy(() -> resolver.getOrganizationFiscalCode("SVC-001"))
+                .isInstanceOfSatisfying(PnInternalException.class, e ->
+                        assertThat(e.getProblem().getErrors().get(0).getCode())
+                                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_MISSING_ORGANIZATION_FISCAL_CODE));
     }
 
     @Test

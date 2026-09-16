@@ -1,9 +1,7 @@
 package it.pagopa.pn.ioconnector.service.io;
 
-import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.config.IoServiceConfigurationResolver;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
-import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.PaymentData;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOClient;
@@ -19,11 +17,9 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -98,32 +94,6 @@ class IOServiceSendMessageTest {
         ioService.sendMessage(request, "api-key");
 
         assertThat(capturePaymentData().getPayee()).isNull();
-    }
-
-    @Test
-    void sendMessage_throwsWhenOrganizationFiscalCodeIsMissing() {
-        MessageSendRequest request = buildRequestWithPayment("01234567890");
-        when(ioServiceConfigurationResolver.getOrganizationFiscalCode("SVC-001")).thenReturn(null);
-
-        assertThatThrownBy(() -> ioService.sendMessage(request, "api-key"))
-                .isInstanceOfSatisfying(PnInternalException.class, e -> {
-                    assertThat(e.getProblem().getDetail()).contains("SVC-001");
-                    assertThat(e.getProblem().getErrors().get(0).getCode())
-                            .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_SERVICE_NOT_CONFIGURED);
-                });
-        verifyNoInteractions(ioClient);
-    }
-
-    @Test
-    void sendMessage_throwsWhenOrganizationFiscalCodeIsBlank() {
-        MessageSendRequest request = buildRequestWithPayment("01234567890");
-        when(ioServiceConfigurationResolver.getOrganizationFiscalCode("SVC-001")).thenReturn("   ");
-
-        assertThatThrownBy(() -> ioService.sendMessage(request, "api-key"))
-                .isInstanceOfSatisfying(PnInternalException.class, e ->
-                        assertThat(e.getProblem().getErrors().get(0).getCode())
-                                .isEqualTo(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_SERVICE_NOT_CONFIGURED));
-        verifyNoInteractions(ioClient);
     }
 
     private PaymentData capturePaymentData() {

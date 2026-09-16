@@ -37,6 +37,11 @@ public class IoServiceConfigurationResolver {
     }
 
     public String getOrganizationFiscalCode(String serviceId) {
-        return getConfiguration(serviceId).organizationFiscalCode();
+        String organizationFiscalCode = getConfiguration(serviceId).organizationFiscalCode();
+        if (!StringUtils.hasText(organizationFiscalCode)) {
+            throw new PnInternalException("Missing organizationFiscalCode for serviceId: " + serviceId,
+                    PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_MISSING_ORGANIZATION_FISCAL_CODE);
+        }
+        return organizationFiscalCode;
     }
 }

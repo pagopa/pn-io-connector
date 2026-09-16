@@ -1,11 +1,9 @@
 package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
-import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ExternalMessageResponseWithContent;
 import it.pagopa.pn.ioconnector.config.IoServiceConfigurationResolver;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
-import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import it.pagopa.pn.ioconnector.exceptions.PnIoGetProfileException;
 
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
@@ -25,7 +23,6 @@ import java.util.Set;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 @Service
 @CustomLog
@@ -92,9 +89,6 @@ public class IOService {
 
     private boolean isPayeeRequired(String senderServiceId, String creditorTaxId) {
         String organizationFiscalCode = ioServiceConfigurationResolver.getOrganizationFiscalCode(senderServiceId);
-        if (!StringUtils.hasText(organizationFiscalCode)) {
-            throw new PnInternalException("Missing organizationFiscalCode for serviceId: " + senderServiceId, PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_SERVICE_NOT_CONFIGURED);
-        }
         return !organizationFiscalCode.equalsIgnoreCase(creditorTaxId);
     }
 
