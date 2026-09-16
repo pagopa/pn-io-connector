@@ -180,6 +180,10 @@ Parameters:
     Type: String
     Description: 'Secret ID for IO Api'
 
+  PnIoConnectorServiceConfigurationsParameterName:
+    Type: String
+    Description: 'Nome del parametro SSM con le configurazioni IO per serviceId'
+
   PnIoConnectorManagedPolicyName:
     Type: String
     Description: 'Nome della managed policy associata ad IO Connector'
@@ -287,6 +291,7 @@ Resources:
         ContainerEnvEntry10: !Sub 'PN_IO_CONNECTOR_DATA_VAULT_BASE_URL=${PnDataVaultBaseUrl}'
         ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${ProjectName}-CoreEventBus'
         ContainerEnvEntry12: !Sub 'PN_IO_CONNECTOR_SQS_POLLING_QUEUE_NAME=${PnIoConnectorPollingQueueName}'
+        ContainerEnvEntry13: !Sub 'PN_IO_CONNECTOR_SERVICE_CONFIGURATIONS_PARAMETER_NAME=${PnIoConnectorServiceConfigurationsParameterName}'
         MappedPaths: '/io-connector/message*,/io-connector/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
@@ -318,7 +323,9 @@ Resources:
               - ssm:GetParameter
               - ssm:GetParameters
               - ssm:GetParametersByPath
-            Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/io-connector/*'
+            Resource:
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/io-connector/*'
+              - !Join [ '', [ !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/', !Ref PnIoConnectorServiceConfigurationsParameterName ] ]
           - Effect: Allow
             Action:
               - dynamodb:GetItem
