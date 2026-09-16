@@ -1,8 +1,11 @@
 package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ExternalMessageResponseWithContent;
+import it.pagopa.pn.ioconnector.config.IoServiceConfigurationResolver;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import it.pagopa.pn.ioconnector.exceptions.PnIoGetProfileException;
 
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
@@ -22,6 +25,7 @@ import java.util.Set;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 @CustomLog
@@ -30,6 +34,7 @@ public class IOService {
 
     private final IOClient ioClient;
     private final PnIoConnectorConfig pnIoConnectorConfig;
+    private final IoServiceConfigurationResolver ioServiceConfigurationResolver;
 
     public LimitedProfile checkUserProfile(String taxId, String apiKey) {
         FiscalCodePayload fiscalCodePayload = new FiscalCodePayload();
@@ -65,13 +70,15 @@ public class IOService {
 
         if (request.getPaymentData() != null) {
             MessageSendRequest.PaymentData pd = request.getPaymentData();
-            Payee payee = new Payee();
-            payee.setFiscalCode(pd.getCreditorTaxId());
             PaymentData paymentData = new PaymentData();
             paymentData.setAmount(pd.getAmount());
             paymentData.setNoticeNumber(pd.getNoticeCode());
             paymentData.setInvalidAfterDueDate(pd.getInvalidAfterDueDate());
-            paymentData.setPayee(payee);
+            if (isPayeeRequired(request.getSenderServiceId(), pd.getCreditorTaxId())) {
+                Payee payee = new Payee();
+                payee.setFiscalCode(pd.getCreditorTaxId());
+                paymentData.setPayee(payee);
+            }
             content.setPaymentData(paymentData);
         }
 
@@ -81,6 +88,14 @@ public class IOService {
         newMessage.setFeatureLevelType("ADVANCED");
 
         return ioClient.sendMessage(newMessage, apiKey);
+    }
+
+    private boolean isPayeeRequired(String senderServiceId, String creditorTaxId) {
+        String organizationFiscalCode = ioServiceConfigurationResolver.getOrganizationFiscalCode(senderServiceId);
+        if (!StringUtils.hasText(organizationFiscalCode)) {
+            throw new PnInternalException("Missing organizationFiscalCode for serviceId: " + senderServiceId, PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_SERVICE_NOT_CONFIGURED);
+        }
+        return !organizationFiscalCode.equalsIgnoreCase(creditorTaxId);
     }
 
     /**
