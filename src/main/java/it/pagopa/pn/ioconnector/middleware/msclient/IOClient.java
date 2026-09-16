@@ -72,9 +72,8 @@ public class IOClient extends BaseRestClient {
 
     private DefaultApi defaultIoApi(String apiKeyUse) {
         return defaultApiCache.computeIfAbsent(apiKeyUse, key -> {
-            var apiClient = new ApiClient(
-                initRestClient(key).baseUrl(config.getIoBaseUrl()).build()
-            );
+            var apiClient = new ApiClient(initRestClient(key).build());
+            apiClient.setBasePath(config.getIoBaseUrl());
             return new DefaultApi(apiClient);
         });
     }
