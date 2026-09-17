@@ -65,13 +65,15 @@ public class IOService {
 
         if (request.getPaymentData() != null) {
             MessageSendRequest.PaymentData pd = request.getPaymentData();
-            Payee payee = new Payee();
-            payee.setFiscalCode(pd.getCreditorTaxId());
             PaymentData paymentData = new PaymentData();
             paymentData.setAmount(pd.getAmount());
             paymentData.setNoticeNumber(pd.getNoticeCode());
             paymentData.setInvalidAfterDueDate(pd.getInvalidAfterDueDate());
-            paymentData.setPayee(payee);
+            if (isPayeeRequired(request.getSenderServiceId(), pd.getCreditorTaxId())) {
+                Payee payee = new Payee();
+                payee.setFiscalCode(pd.getCreditorTaxId());
+                paymentData.setPayee(payee);
+            }
             content.setPaymentData(paymentData);
         }
 
@@ -81,6 +83,11 @@ public class IOService {
         newMessage.setFeatureLevelType("ADVANCED");
 
         return ioClient.sendMessage(newMessage, apiKey);
+    }
+
+    private boolean isPayeeRequired(String senderServiceId, String creditorTaxId) {
+        String organizationFiscalCode = ioServiceConfigurationResolver.getOrganizationFiscalCode(senderServiceId);
+        return !organizationFiscalCode.equalsIgnoreCase(creditorTaxId);
     }
 
     /**
