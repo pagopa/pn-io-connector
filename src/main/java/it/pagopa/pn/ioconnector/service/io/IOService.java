@@ -73,6 +73,7 @@ public class IOService {
                 Payee payee = new Payee();
                 payee.setFiscalCode(pd.getCreditorTaxId());
                 paymentData.setPayee(payee);
+                log.debug("Setting Payee for requestId: {}", request.getRequestId());
             }
             content.setPaymentData(paymentData);
         }
