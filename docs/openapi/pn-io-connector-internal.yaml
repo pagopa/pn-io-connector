@@ -6,11 +6,11 @@ info:
 
 tags:
   - name: IoConnector
-    description: Comunicazioni di cortesia (bonarie) verso App IO
+    description: Comunicazioni bonarie verso App IO
   - name: IoActivation
     description: Attivazione del servizio SEND su App IO e accettazione dei consensi
   - name: SendIoMessage
-    description: Invio messaggi e verifica stato utente su App IO
+    description: Comunicazioni a valore legale verso App IO
 
 paths:
   /io-connector/message:
