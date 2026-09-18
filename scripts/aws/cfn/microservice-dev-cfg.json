@@ -1,11 +1,13 @@
 {
   "Parameters" : {
     "PnIoConnectorSecretsName":"Pn-Io-Connector-Secrets",
+    "PnIoConnectorLegalSecretsName":"Pn-Io-Connector-Legal-Secrets",
     "PnCommonsRetryMaxAttempts":"3",
     "PnCommonsConnectionTimeoutMillis":"10000",
     "PnCommonsReadTimeoutMillis":"30000",
     "DownloadModeRedirect": "false",
     "SafeStorageGetFilePath": "/safe-storage/v1/files",
-    "PnIoConnectorIoBaseUrl": "http://internal-EcsA-20230409091221502000000003-2047636771.eu-south-1.elb.amazonaws.com:8080/api/v1"
+    "PnIoConnectorIoBaseUrl": "http://internal-EcsA-20230409091221502000000003-2047636771.eu-south-1.elb.amazonaws.com:8080/api/v1",
+    "PnIoConnectorIoLegalBaseUrl": "https://api.io.pagopa.it/api/v1"
   }
 }

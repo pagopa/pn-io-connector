@@ -180,6 +180,10 @@ Parameters:
     Type: String
     Description: 'Secret ID for IO Api'
 
+  PnIoConnectorLegalSecretsName:
+    Type: String
+    Description: 'Secret ID per le API key e la whitelist del dominio legale IO'
+
   PnIoConnectorManagedPolicyName:
     Type: String
     Description: 'Nome della managed policy associata ad IO Connector'
@@ -213,6 +217,11 @@ Parameters:
     Type: String
     Default: 'https://api.io.pagopa.it/api/v1'
     Description: 'Base URL of Backend IO. In test environments points to the Lambda router, in production the real IO API.'
+
+  PnIoConnectorIoLegalBaseUrl:
+    Type: String
+    Default: 'https://api.io.pagopa.it/api/v1'
+    Description: 'Base URL of Backend IO per il dominio legale. Distinto da PnIoConnectorIoBaseUrl, che negli ambienti non produttivi punta al mock delle comunicazioni bonarie.'
 
   PnIoConnectorPollingQueueName:
     Type: String
@@ -293,7 +302,9 @@ Resources:
         ContainerEnvEntry11: !Sub 'PN_IO_CONNECTOR_EVENT_BRIDGE_BUS_NAME=${ProjectName}-CoreEventBus'
         ContainerEnvEntry12: !Sub 'PN_IO_CONNECTOR_SQS_POLLING_QUEUE_NAME=${PnIoConnectorPollingQueueName}'
         ContainerEnvEntry13: !Sub 'PN_IO_CONNECTOR_IO_BASE_URL=${PnIoConnectorIoBaseUrl}'
-        MappedPaths: '/io-connector/message*,/io-connector/profile*'
+        ContainerEnvEntry14: !Sub 'PN_IO_CONNECTOR_LEGAL_SECRETS_NAME=${PnIoConnectorLegalSecretsName}'
+        ContainerEnvEntry15: !Sub 'PN_IO_CONNECTOR_IO_LEGAL_BASE_URL=${PnIoConnectorIoLegalBaseUrl}'
+        MappedPaths: '/io-connector/message*,/io-connector/profile*,/io-connector/activations*,/io-connector/user-status*,/io-connector/sendmessage*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
         VpcId: !Ref VpcId
@@ -351,6 +362,7 @@ Resources:
               - 'secretsmanager:GetSecretValue'
             Resource:
               - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorSecretsName , '*' ] ]
+              - !Join [ '', [ !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:' , !Ref PnIoConnectorLegalSecretsName , '*' ] ]
           - Effect: Allow
             Action:
               - 'events:DescribeEventBus'
