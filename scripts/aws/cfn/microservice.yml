@@ -255,6 +255,16 @@ Parameters:
     Type: Number
     Default: 10
 
+  CpuArchitecture:
+    Type: String
+    Default: 'ARM'
+    Description: CPU architecture for the Fargate tasks
+
+  JavaToolOptions:
+    Type: String
+    Default: '-Dreactor.netty.ioWorkerCount=50'
+    Description: Java tool options for the Fargate tasks
+
 Resources:
   PnIoConnectorMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -263,7 +273,7 @@ Resources:
       Parameters:
         MicroServiceUniqueName: !Sub '${ProjectName}-io-connector'
         CpuValue: !Ref CpuValue
-        CpuArchitecture: ARM
+        CpuArchitecture: !Ref CpuArchitecture
         MemoryAmount: !Ref MemoryAmount
         HealthCheckTimeout: !Ref HealthCheckTimeout
         HealthCheckInterval: !Ref HealthCheckInterval
@@ -305,6 +315,7 @@ Resources:
         EcsLogGroup: !Ref EcsLogGroup
         LogAlarmStrategyV1: !Ref LogAlarmStrategy
         ApplicativeEnvFileChecksum: !Ref ApplicativeEnvFileChecksum
+        JavaToolOptions: !Ref JavaToolOptions
 
   PnIoConnectorManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
