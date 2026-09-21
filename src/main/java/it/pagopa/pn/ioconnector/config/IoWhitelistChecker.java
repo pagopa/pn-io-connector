@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 
 
 @Getter
-@CustomLog
 public class IoWhitelistChecker {
 
     private static final String WILDCARD = "*";
@@ -29,7 +28,6 @@ public class IoWhitelistChecker {
                     .collect(Collectors.toUnmodifiableSet());
             this.enabled = !this.allowed.isEmpty();
         }
-        log.info("IO whitelist - enabled={} size={}", this.enabled, this.allowed.size());
     }
 
     /**

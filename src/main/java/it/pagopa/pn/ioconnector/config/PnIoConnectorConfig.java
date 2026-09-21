@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 
 @Data
-@CustomLog
 @Validated
 @Configuration
 @Import(SharedAutoConfiguration.class)
@@ -84,9 +83,6 @@ public class PnIoConnectorConfig {
             throw new PnInternalException("Incomplete legal secret, both IoApiKey and IoActApiKey are required: " + legalSecretsName,
                     PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR);
         }
-
-        log.info("Legal secret loaded from Secrets Manager: {} - whitelist entries={}",
-                legalSecretsName, secrets.ioWhitelist() == null ? 0 : secrets.ioWhitelist().size());
         return secrets;
     }
 
