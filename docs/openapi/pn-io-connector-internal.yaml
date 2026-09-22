@@ -182,9 +182,9 @@ paths:
         l'operazione senza alcuna chiamata verso App IO.
       operationId: upsertIoActivation
       parameters:
-        - $ref: '#/components/parameters/xPagopaPnUid'
-        - $ref: '#/components/parameters/xPagopaPnCxType'
-        - $ref: '#/components/parameters/xPagopaPnCxId'
+        - $ref: 'remote-refs.yaml#/components/parameters/uidAuthFleet'
+        - $ref: 'remote-refs.yaml#/components/parameters/cxTypeAuthFleet'
+        - $ref: 'remote-refs.yaml#/components/parameters/cxIdAuthFleet'
       requestBody:
         required: true
         content:
@@ -289,33 +289,6 @@ components:
       description: Identificativo del client che invoca il microservizio (cxId).
       schema:
         type: string
-
-    xPagopaPnUid:
-      name: x-pagopa-pn-uid
-      in: header
-      required: true
-      description: >
-        Identificativo dell'utente.
-      schema:
-        type: string
-        maxLength: 64
-
-    xPagopaPnCxType:
-      name: x-pagopa-pn-cx-type
-      in: header
-      required: true
-      description: Tipologia del soggetto per cui si effettua l'attivazione.
-      schema:
-        $ref: '#/components/schemas/CxTypeAuthFleet'
-
-    xPagopaPnCxId:
-      name: x-pagopa-pn-cx-id
-      in: header
-      required: true
-      description: Identificativo del soggetto per cui si effettua l'attivazione.
-      schema:
-        type: string
-        maxLength: 64
 
   schemas:
 
@@ -554,12 +527,6 @@ components:
           type: string
 
     # --- Dominio legale -----------------------------------------------------
-
-    CxTypeAuthFleet:
-      type: string
-      description: >
-        Sottoinsieme dei valori auth-fleet.
-      enum: [PF, PG]
 
     FiscalCodePayload:
       type: object
