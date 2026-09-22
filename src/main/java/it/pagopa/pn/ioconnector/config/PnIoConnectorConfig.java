@@ -6,11 +6,13 @@ import it.pagopa.pn.commons.conf.SharedAutoConfiguration;
 import jakarta.validation.constraints.NotBlank;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
+import lombok.CustomLog;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
@@ -27,6 +29,7 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "pn.io-connector")
 public class PnIoConnectorConfig {
     private String ioBaseUrl;
+    private String ioLegalBaseUrl;
     private String dataVaultBaseUrl;
     private String dynamodbTableName;
     @NotBlank
@@ -34,11 +37,15 @@ public class PnIoConnectorConfig {
     private String sqsPollingQueueName;
     private String eventBridgeBusName;
     private String secretsName;
+    private String legalSecretsName;
     private List<Integer> sendRetryPolicy;
     private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
     private String ioConfigurationId;
 
+    /**
+     * Comunicazioni Bonarie
+     */
     @Bean
     public Map<String, String> apiKeyUseSecrets(SecretsManagerClient secretsManagerClient, ObjectMapper objectMapper) {
         Map<String, String> apiKeyUseMap = new HashMap<>();
@@ -55,5 +62,32 @@ public class PnIoConnectorConfig {
                     PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_SECRETSMANAGER_ERROR, e);
         }
         return apiKeyUseMap;
+    }
+
+    /**
+     * Comunicazioni a valore Legale
+     */
+    @Bean
+    public IoLegalSecrets ioLegalSecrets(SecretsManagerClient secretsManagerClient, ObjectMapper objectMapper) {
+        IoLegalSecrets secrets;
+        GetSecretValueRequest request = GetSecretValueRequest.builder().secretId(legalSecretsName).build();
+        try {
+            GetSecretValueResponse response = secretsManagerClient.getSecretValue(request);
+            secrets = objectMapper.readValue(response.secretString(), IoLegalSecrets.class);
+        } catch (Exception e) {
+            throw new PnInternalException("Failed to retrieve value from Secrets Manager: " + legalSecretsName,
+                    PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR, e);
+        }
+
+        if (secrets == null || !StringUtils.hasText(secrets.ioApiKey()) || !StringUtils.hasText(secrets.ioActApiKey())) {
+            throw new PnInternalException("Incomplete legal secret, both IoApiKey and IoActApiKey are required: " + legalSecretsName,
+                    PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR);
+        }
+        return secrets;
+    }
+
+    @Bean
+    public IoWhitelistChecker ioWhitelistChecker(IoLegalSecrets ioLegalSecrets) {
+        return new IoWhitelistChecker(ioLegalSecrets.ioWhitelist());
     }
 }

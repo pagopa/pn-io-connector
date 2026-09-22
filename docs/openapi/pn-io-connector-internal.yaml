@@ -5,8 +5,12 @@ info:
   description: API esposta da pn-io-connector per le operazioni verso App IO.
 
 tags:
-  - name: Io
-    description: Operazioni verso App IO
+  - name: IoConnector
+    description: Comunicazioni bonarie verso App IO
+  - name: IoActivation
+    description: Attivazione del servizio SEND su App IO e accettazione dei consensi
+  - name: SendIoMessage
+    description: Comunicazioni a valore legale verso App IO
 
 paths:
   /io-connector/message:
@@ -125,6 +129,157 @@ paths:
                 $ref: '#/components/schemas/GetMessageResponse'
         '404':
           description: Messaggio non trovato (richiesta inesistente o codice fiscale del chiamante non coerente con il destinatario).
+
+  /io-connector/activations:
+    post:
+      tags: [IoActivation]
+      summary: Lettura stato attivazione SEND su App IO
+      description: >
+        Endpoint di sola lettura: restituisce lo stato corrente di attivazione del
+        servizio SEND sull'Activation Service di App IO.
+      operationId: getIoActivation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalCodePayload'
+      responses:
+        '200':
+          description: Stato di attivazione corrente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activation'
+        '400':
+          description: Richiesta malformata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Utente non trovato su App IO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          description: Errore interno del server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+    put:
+      tags: [IoActivation]
+      summary: Creazione o aggiornamento dell'attivazione SEND su App IO
+      description: >
+        Se lo stato richiesto è ACTIVE vengono prima registrati i consensi TOS
+        e DATAPRIVACY per l'utente identificato dagli header auth-fleet, poi
+        viene effettuato l'upsert dell'attivazione su App IO. Se lo stato
+        richiesto è INACTIVE i consensi non vengono toccati. In caso di errore
+        HTTP da IO viene tentato un fallback leggendo lo stato corrente tramite
+        getIoActivation. Un errore sul ramo dei consensi interrompe
+        l'operazione senza alcuna chiamata verso App IO.
+      operationId: upsertIoActivation
+      parameters:
+        - $ref: 'remote-refs.yaml#/components/parameters/uidAuthFleet'
+        - $ref: 'remote-refs.yaml#/components/parameters/cxTypeAuthFleet'
+        - $ref: 'remote-refs.yaml#/components/parameters/cxIdAuthFleet'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivationPayload'
+      responses:
+        '200':
+          description: Stato di attivazione aggiornato.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activation'
+        '400':
+          description: Richiesta malformata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          description: >
+            Errore nella registrazione dei consensi o nell'aggiornamento
+            dell'attivazione. Pilota il rollback lato consumer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /io-connector/user-status:
+    post:
+      tags: [SendIoMessage]
+      summary: Verifica se l'utente è contattabile per il servizio SEND
+      description: >
+        Restituisce lo stato dell'utente rispetto ad App IO e al servizio SEND,
+        con esito a quattro valori.
+      operationId: getIoUserStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserStatusRequest'
+      responses:
+        '200':
+          description: Stato dell'utente rispetto ad App IO e al servizio SEND.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatusResponse'
+        '400':
+          description: Richiesta malformata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          description: Errore interno del server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /io-connector/sendmessage:
+    post:
+      tags: [SendIoMessage]
+      summary: Invio di un messaggio su App IO per una notifica SEND
+      description: >
+        Il tipo di messaggio inviato (cortesia o opt-in) è determinato dallo
+        stato dell'utente su App IO.
+      operationId: sendLegalIOMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: Esito dell'invio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageResponse'
+        '400':
+          description: Richiesta malformata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          description: Errore interno del server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
 components:
   parameters:
     xPagopaIoConCxId:
@@ -370,3 +525,145 @@ components:
           type: string
         traceId:
           type: string
+
+    # --- Dominio legale -----------------------------------------------------
+
+    FiscalCodePayload:
+      type: object
+      required:
+        - fiscal_code
+      properties:
+        fiscal_code:
+          type: string
+          description: Codice fiscale in chiaro del destinatario.
+          minLength: 16
+          maxLength: 16
+
+    ActivationPayload:
+      type: object
+      required:
+        - fiscal_code
+        - status
+      properties:
+        fiscal_code:
+          type: string
+          description: Codice fiscale in chiaro del destinatario.
+        status:
+          $ref: '#/components/schemas/ActivationStatus'
+
+    Activation:
+      type: object
+      required:
+        - fiscal_code
+        - status
+      properties:
+        fiscal_code:
+          type: string
+        status:
+          $ref: '#/components/schemas/ActivationStatus'
+        version:
+          type: integer
+
+    ActivationStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE, PENDING]
+
+    UserStatusRequest:
+      type: object
+      required:
+        - taxId
+      properties:
+        taxId:
+          type: string
+          description: Codice fiscale in chiaro del destinatario.
+          minLength: 16
+          maxLength: 16
+
+    UserStatusResponse:
+      type: object
+      required:
+        - taxId
+        - status
+      properties:
+        taxId:
+          type: string
+        status:
+          type: string
+          description: >
+            APPIO_NOT_ACTIVE = utente non presente su App IO;
+            PN_NOT_ACTIVE = utente presente ma servizio SEND non abilitato;
+            PN_ACTIVE = utente presente con servizio SEND abilitato;
+            ERROR = errore nella verifica dello stato.
+          enum: [APPIO_NOT_ACTIVE, PN_NOT_ACTIVE, PN_ACTIVE, ERROR]
+
+    SendMessageRequest:
+      type: object
+      required:
+        - iun
+        - recipientTaxID
+        - recipientInternalID
+        - recipientIndex
+        - senderDenomination
+      properties:
+        requestId:
+          type: string
+          description: >
+            Identificativo della richiesta, generato dal chiamante.
+        iun:
+          type: string
+          description: Identificativo Univoco Notifica su SEND.
+        recipientTaxID:
+          type: string
+          description: Codice fiscale in chiaro del destinatario.
+        recipientInternalID:
+          type: string
+          description: Identificativo interno (internalId) del destinatario.
+        recipientIndex:
+          type: integer
+          description: Indice del destinatario all'interno della notifica.
+        senderDenomination:
+          type: string
+          description: Denominazione dell'ente mittente.
+        subject:
+          type: string
+          description: Oggetto della notifica.
+        due_date:
+          type: string
+          format: date-time
+        requestAcceptedDate:
+          type: string
+          format: date-time
+        carbonCopyToDeliveryPush:
+          type: boolean
+          default: false
+          description: >
+            Se true, a invio riuscito viene pubblicato l'evento SQS verso
+            pn-delivery-push per l'aggiornamento della timeline.
+        deliveryMode:
+          type: string
+          enum: [DIGITAL, ANALOG]
+          description: Determina la selezione del template di opt-in. Default ANALOG se assente.
+
+    SendMessageResponse:
+      type: object
+      properties:
+        result:
+          type: string
+          enum:
+            - SENT_COURTESY
+            - SENT_OPTIN
+            - NOT_SENT_APPIO_UNAVAILABLE
+            - NOT_SENT_OPTIN_ALREADY_SENT
+            - NOT_SENT_OPTIN_DISABLED_BY_CONF
+            - NOT_SENT_COURTESY_DISABLED_BY_CONF
+            - ERROR_USER_STATUS
+            - ERROR_COURTESY
+            - ERROR_OPTIN
+        id:
+          type: string
+          description: Identificativo del messaggio su App IO, se inviato.
+        requestId:
+          type: string
+          description: >
+            Identificativo della richiesta, coincidente con quello fornito dal
+            chiamante o generato dal microservizio se assente.
