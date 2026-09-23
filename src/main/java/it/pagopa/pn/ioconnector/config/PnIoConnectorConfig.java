@@ -6,7 +6,6 @@ import it.pagopa.pn.commons.conf.SharedAutoConfiguration;
 import jakarta.validation.constraints.NotBlank;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
-import lombok.CustomLog;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -32,6 +31,7 @@ public class PnIoConnectorConfig {
     private String ioLegalBaseUrl;
     private String dataVaultBaseUrl;
     private String dynamodbTableName;
+    private String optinDynamodbTableName;
     @NotBlank
     private String sqsSendQueueName;
     private String sqsPollingQueueName;
@@ -42,6 +42,7 @@ public class PnIoConnectorConfig {
     private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
     private String ioConfigurationId;
+    private int ioOptinMinDays;
 
     /**
      * Comunicazioni Bonarie
