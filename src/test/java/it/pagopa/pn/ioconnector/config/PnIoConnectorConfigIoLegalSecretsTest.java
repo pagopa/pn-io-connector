@@ -6,17 +6,19 @@ import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -35,7 +37,8 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     void setUp() {
         config = new PnIoConnectorConfig();
         config.setLegalSecretsName(SECRET_NAME);
-        objectMapper = new ObjectMapper();
+        // stesso builder usato da Spring Boot per l'ObjectMapper del contesto
+        objectMapper = Jackson2ObjectMapperBuilder.json().build();
     }
 
     private void mockSecret(String secretString) {
@@ -43,50 +46,98 @@ class PnIoConnectorConfigIoLegalSecretsTest {
                 .thenReturn(GetSecretValueResponse.builder().secretString(secretString).build());
     }
 
+    private PnInternalException assertStartupFails() {
+        PnInternalException ex = assertThrows(PnInternalException.class,
+                () -> config.ioLegalSecrets(secretsManagerClient, objectMapper));
+        assertEquals(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR,
+                ex.getProblem().getErrors().get(0).getCode());
+        return ex;
+    }
+
     @Test
     void completeSecret_isParsedWithDeclaredJsonNames() {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhitelist":["CF1","CF2"]}""");
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"CF1,CF2"}""");
 
         IoLegalSecrets secrets = config.ioLegalSecrets(secretsManagerClient, objectMapper);
 
         assertEquals("key-legal", secrets.ioApiKey());
         assertEquals("key-optin", secrets.ioActApiKey());
-        assertEquals(List.of("CF1", "CF2"), secrets.ioWhitelist());
+        assertEquals("CF1,CF2", secrets.ioWhiteList());
     }
 
     @Test
-    void missingWhitelist_isLegitimate_andMeansFilterDisabled() {
+    void whitelistInExternalRegistriesFormat_enablesFilter() {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"BSTLSS72M29L736X, TRRMTT71R09A944J"}""");
+
+        IoWhitelistChecker checker = config.ioWhitelistChecker(config.ioLegalSecrets(secretsManagerClient, objectMapper));
+
+        assertTrue(checker.isEnabled());
+        assertTrue(checker.isAllowed("BSTLSS72M29L736X"));
+        assertTrue(checker.isAllowed("TRRMTT71R09A944J"));
+        assertFalse(checker.isAllowed("RSSMRA80A01H501U"));
+    }
+
+    @Test
+    void wildcardWhitelist_disablesFilter() {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"*"}""");
+
+        IoWhitelistChecker checker = config.ioWhitelistChecker(config.ioLegalSecrets(secretsManagerClient, objectMapper));
+
+        assertFalse(checker.isEnabled());
+        assertTrue(checker.isAllowed("RSSMRA80A01H501U"));
+    }
+
+    @Test
+    void missingWhitelist_failsStartup() {
         mockSecret("""
                 {"IoApiKey":"key-legal","IoActApiKey":"key-optin"}""");
 
-        IoLegalSecrets secrets = config.ioLegalSecrets(secretsManagerClient, objectMapper);
+        assertStartupFails();
+    }
 
-        assertNull(secrets.ioWhitelist());
-        assertEquals(false, new IoWhitelistChecker(secrets.ioWhitelist()).isEnabled());
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", " , "})
+    void emptyWhitelist_failsStartup(String whitelist) {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"%s"}""".formatted(whitelist));
+
+        assertStartupFails();
+    }
+
+    @Test
+    void whitelistKeyWithDifferentCase_isIgnored_andFailsStartupListingTheKeysFound() {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhitelist":"CF1,CF2"}""");
+
+        PnInternalException ex = assertStartupFails();
+
+        assertTrue(ex.getProblem().getDetail().contains("[IoApiKey, IoActApiKey, IoWhitelist]"));
+    }
+
+    @Test
+    void whitelistAsJsonArray_failsStartup() {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":["CF1","CF2"]}""");
+
+        assertStartupFails();
     }
 
     @Test
     void missingIoApiKey_failsStartup() {
         mockSecret("""
-                {"IoActApiKey":"key-optin"}""");
+                {"IoActApiKey":"key-optin","IoWhiteList":"*"}""");
 
-        PnInternalException ex = assertThrows(PnInternalException.class,
-                () -> config.ioLegalSecrets(secretsManagerClient, objectMapper));
-
-        assertEquals(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR,
-                ex.getProblem().getErrors().get(0).getCode());
+        assertStartupFails();
     }
 
     @Test
     void blankIoActApiKey_failsStartup() {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"  "}""");
+                {"IoApiKey":"key-legal","IoActApiKey":"  ","IoWhiteList":"*"}""");
 
-        PnInternalException ex = assertThrows(PnInternalException.class,
-                () -> config.ioLegalSecrets(secretsManagerClient, objectMapper));
-
-        assertEquals(PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR,
-                ex.getProblem().getErrors().get(0).getCode());
+        assertStartupFails();
     }
 }

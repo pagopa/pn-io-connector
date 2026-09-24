@@ -17,8 +17,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -43,11 +41,11 @@ class IOLegalClientTest {
     private DefaultApi ioOptInApi;
 
     private IOLegalClient clientWithWhitelist() {
-        return new IOLegalClient(ioLegalApi, ioOptInApi, new IoWhitelistChecker(List.of(ALLOWED_CF)));
+        return new IOLegalClient(ioLegalApi, ioOptInApi, new IoWhitelistChecker(ALLOWED_CF));
     }
 
     private IOLegalClient clientWithoutWhitelist() {
-        return new IOLegalClient(ioLegalApi, ioOptInApi, new IoWhitelistChecker(List.of("*")));
+        return new IOLegalClient(ioLegalApi, ioOptInApi, new IoWhitelistChecker("*"));
     }
 
     private static FiscalCodePayload fiscalCode(String cf) {
