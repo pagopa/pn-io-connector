@@ -1,7 +1,7 @@
 package it.pagopa.pn.ioconnector.config;
 
-import lombok.CustomLog;
 import lombok.Getter;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Locale;
@@ -17,27 +17,23 @@ public class IoWhitelistChecker {
     private final Set<String> allowed;
     private final boolean enabled;
 
-    public IoWhitelistChecker(List<String> whitelist) {
-        if (whitelist == null || whitelist.isEmpty() || whitelist.contains(WILDCARD)) {
-            this.allowed = Set.of();
-            this.enabled = false;
-        } else {
-            this.allowed = whitelist.stream()
-                    .filter(taxId -> taxId != null && !taxId.isBlank())
-                    .map(IoWhitelistChecker::normalize)
-                    .collect(Collectors.toUnmodifiableSet());
-            this.enabled = !this.allowed.isEmpty();
-        }
+    public IoWhitelistChecker(String whitelist) {
+        List<String> entries = parse(whitelist);
+        this.enabled = !entries.contains(WILDCARD);
+        this.allowed = enabled
+                ? entries.stream().map(IoWhitelistChecker::normalize).collect(Collectors.toUnmodifiableSet())
+                : Set.of();
     }
 
-    /**
-     * @return true se il filtro è disattivo oppure se il codice fiscale è in lista.
-     */
     public boolean isAllowed(String taxId) {
         if (!enabled) {
             return true;
         }
         return taxId != null && allowed.contains(normalize(taxId));
+    }
+
+    static List<String> parse(String whitelist) {
+        return List.of(StringUtils.tokenizeToStringArray(whitelist, ","));
     }
 
     private static String normalize(String taxId) {
