@@ -119,7 +119,7 @@ create_secret() {
 initialize_secrets() {
   log "Initializing Secrets Manager"
   create_secret "$SECRETS_NAME" '{"io-api-key":"test-api-key"}' || return 1
-  create_secret "$LEGAL_SECRETS_NAME" '{"IoApiKey":"test-legal-api-key","IoActApiKey":"test-optin-api-key","IoWhitelist":["*"]}' || return 1
+  create_secret "$LEGAL_SECRETS_NAME" '{"IoApiKey":"test-legal-api-key","IoActApiKey":"test-optin-api-key","IoWhiteList":"*"}' || return 1
 }
 
 initialize_dynamo() {

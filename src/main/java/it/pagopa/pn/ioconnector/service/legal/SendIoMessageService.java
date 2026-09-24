@@ -1,6 +1,7 @@
 package it.pagopa.pn.ioconnector.service.legal;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
+import it.pagopa.pn.commons.utils.LogUtils;
 import it.pagopa.pn.ioconnector.exceptions.PnNotImplementedException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.FiscalCodePayload;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
@@ -32,7 +33,7 @@ public class SendIoMessageService {
             if (e.getStatusCode() == 404) {
                 status = UserStatusResponse.StatusEnum.APPIO_NOT_ACTIVE;
             } else {
-                log.warn("getUserStatus failed for taxId={} - status={}", taxId, e.getStatusCode());
+                log.warn("getUserStatus failed for taxId={} - status={}", LogUtils.maskTaxId(taxId), e.getStatusCode());
                 status = UserStatusResponse.StatusEnum.ERROR;
             }
         }
