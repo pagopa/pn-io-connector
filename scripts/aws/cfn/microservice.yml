@@ -192,6 +192,10 @@ Parameters:
     Type: String
     Description: 'Secret ID per le API key e la whitelist del dominio legale IO'
 
+  PnIoConnectorServiceConfigurationsParameterName:
+    Type: String
+    Description: 'Nome del parametro SSM con le configurazioni IO per serviceId'
+
   PnIoConnectorManagedPolicyName:
     Type: String
     Description: 'Nome della managed policy associata ad IO Connector'
@@ -323,6 +327,7 @@ Resources:
         ContainerEnvEntry14: !Sub 'PN_IO_CONNECTOR_LEGAL_SECRETS_NAME=${PnIoConnectorLegalSecretsName}'
         ContainerEnvEntry15: !Sub 'PN_IO_CONNECTOR_IO_LEGAL_BASE_URL=${PnIoConnectorIoLegalBaseUrl}'
         ContainerEnvEntry16: !Sub 'PN_IO_CONNECTOR_OPTIN_DYNAMODB_TABLE_NAME=${PnIoConnectorOptInTableName}'
+        ContainerEnvEntry17: !Sub 'PN_IO_CONNECTOR_SERVICE_CONFIGURATIONS_PARAMETER_NAME=${PnIoConnectorServiceConfigurationsParameterName}'
         MappedPaths: '/io-connector/message*,/io-connector/profile*,/io-connector/activations*,/io-connector/user-status*,/io-connector/sendmessage*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
@@ -355,7 +360,9 @@ Resources:
               - ssm:GetParameter
               - ssm:GetParameters
               - ssm:GetParametersByPath
-            Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/io-connector/*'
+            Resource:
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/io-connector/*'
+              - !Join [ '', [ !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/', !Ref PnIoConnectorServiceConfigurationsParameterName ] ]
           - Effect: Allow
             Action:
               - dynamodb:GetItem

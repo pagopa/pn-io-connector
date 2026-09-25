@@ -1,7 +1,10 @@
 package it.pagopa.pn.ioconnector.service.io;
 
-import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.ioconnector.config.IoServiceConfigurationResolver;
+import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.PaymentData;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOClient;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
 import org.junit.jupiter.api.Test;
@@ -15,16 +18,18 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class IOServiceSendMessageTest {
 
     @Mock private IOClient ioClient;
-    @Mock private PnIoConnectorConfig pnIoConnectorConfig;
+    @Mock private IoServiceConfigurationResolver ioServiceConfigurationResolver;
 
     @InjectMocks private IOService ioService;
 
@@ -46,6 +51,7 @@ class IOServiceSendMessageTest {
         request.setAttachments(List.of(
                 MessageSendRequest.Attachment.builder().fileKey("file-key-1.pdf").build())
         );
+        when(ioServiceConfigurationResolver.getConfigurationId("SVC-001")).thenReturn("CONF-001");
         when(ioClient.sendMessage(any(NewMessage.class), eq("api-key"))).thenReturn("IO-MSG-001");
 
         ioService.sendMessage(request, "api-key");
@@ -54,6 +60,90 @@ class IOServiceSendMessageTest {
         verify(ioClient).sendMessage(captor.capture(), eq("api-key"));
         assertThat(captor.getValue().getContent().getThirdPartyData()).isNotNull();
         assertThat(captor.getValue().getContent().getThirdPartyData().getHasAttachments()).isTrue();
+        assertThat(captor.getValue().getContent().getThirdPartyData().getConfigurationId()).isEqualTo("CONF-001");
+    }
+
+    @Test
+    void sendMessage_doesNotResolveConfigurationWhenNoAttachments() {
+        MessageSendRequest request = buildRequest();
+        when(ioClient.sendMessage(any(NewMessage.class), eq("api-key"))).thenReturn("IO-MSG-001");
+
+        ioService.sendMessage(request, "api-key");
+
+        ArgumentCaptor<NewMessage> captor = ArgumentCaptor.forClass(NewMessage.class);
+        verify(ioClient).sendMessage(captor.capture(), eq("api-key"));
+        assertThat(captor.getValue().getContent().getThirdPartyData()).isNull();
+        verifyNoInteractions(ioServiceConfigurationResolver);
+    }
+
+    @Test
+    void sendMessage_failsWhenAttachmentsPresentAndServiceNotConfigured() {
+        MessageSendRequest request = buildRequest();
+        request.setAttachments(List.of(
+                MessageSendRequest.Attachment.builder().fileKey("file-key-1.pdf").build())
+        );
+        when(ioServiceConfigurationResolver.getConfigurationId("SVC-001"))
+                .thenThrow(new PnInternalException("No configuration specified for serviceId: SVC-001",
+                        PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_SERVICE_NOT_CONFIGURED));
+
+        assertThatThrownBy(() -> ioService.sendMessage(request, "api-key"))
+                .isInstanceOf(PnInternalException.class);
+
+        verifyNoInteractions(ioClient);
+    }
+
+    @Test
+    void sendMessage_setsPayeeWhenCreditorTaxIdDiffersFromOrganizationFiscalCode() {
+        MessageSendRequest request = buildRequestWithPayment("01234567890");
+        when(ioServiceConfigurationResolver.getOrganizationFiscalCode("SVC-001")).thenReturn("12345678910");
+        when(ioClient.sendMessage(any(NewMessage.class), eq("api-key"))).thenReturn("IO-MSG-001");
+
+        ioService.sendMessage(request, "api-key");
+
+        assertThat(capturePaymentData().getPayee().getFiscalCode()).isEqualTo("01234567890");
+    }
+
+    @Test
+    void sendMessage_omitsPayeeWhenCreditorTaxIdMatchesOrganizationFiscalCode() {
+        MessageSendRequest request = buildRequestWithPayment("12345678910");
+        when(ioServiceConfigurationResolver.getOrganizationFiscalCode("SVC-001")).thenReturn("12345678910");
+        when(ioClient.sendMessage(any(NewMessage.class), eq("api-key"))).thenReturn("IO-MSG-001");
+
+        ioService.sendMessage(request, "api-key");
+
+        PaymentData paymentData = capturePaymentData();
+        assertThat(paymentData.getPayee()).isNull();
+        assertThat(paymentData.getAmount()).isEqualTo(100);
+        assertThat(paymentData.getNoticeNumber()).isEqualTo("301011100007347557");
+        assertThat(paymentData.getInvalidAfterDueDate()).isTrue();
+    }
+
+    @Test
+    void sendMessage_omitsPayeeWhenCreditorTaxIdMatchesIgnoringCase() {
+        MessageSendRequest request = buildRequestWithPayment("rssmra80a01h501u");
+        when(ioServiceConfigurationResolver.getOrganizationFiscalCode("SVC-001")).thenReturn("RSSMRA80A01H501U");
+        when(ioClient.sendMessage(any(NewMessage.class), eq("api-key"))).thenReturn("IO-MSG-001");
+
+        ioService.sendMessage(request, "api-key");
+
+        assertThat(capturePaymentData().getPayee()).isNull();
+    }
+
+    private PaymentData capturePaymentData() {
+        ArgumentCaptor<NewMessage> captor = ArgumentCaptor.forClass(NewMessage.class);
+        verify(ioClient).sendMessage(captor.capture(), eq("api-key"));
+        return captor.getValue().getContent().getPaymentData();
+    }
+
+    private MessageSendRequest buildRequestWithPayment(String creditorTaxId) {
+        MessageSendRequest request = buildRequest();
+        request.setPaymentData(MessageSendRequest.PaymentData.builder()
+                .amount(100)
+                .noticeCode("301011100007347557")
+                .creditorTaxId(creditorTaxId)
+                .invalidAfterDueDate(true)
+                .build());
+        return request;
     }
 
     private MessageSendRequest buildRequest() {

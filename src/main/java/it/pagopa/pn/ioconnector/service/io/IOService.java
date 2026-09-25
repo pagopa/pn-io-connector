@@ -2,7 +2,7 @@ package it.pagopa.pn.ioconnector.service.io;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ExternalMessageResponseWithContent;
-import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.ioconnector.config.IoServiceConfigurationResolver;
 import it.pagopa.pn.ioconnector.exceptions.PnIoGetProfileException;
 
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
@@ -29,7 +29,7 @@ import org.springframework.stereotype.Service;
 public class IOService {
 
     private final IOClient ioClient;
-    private final PnIoConnectorConfig pnIoConnectorConfig;
+    private final IoServiceConfigurationResolver ioServiceConfigurationResolver;
 
     public LimitedProfile checkUserProfile(String taxId, String apiKey) {
         FiscalCodePayload fiscalCodePayload = new FiscalCodePayload();
@@ -59,19 +59,22 @@ public class IOService {
             ThirdPartyData thirdPartyData = new ThirdPartyData();
             thirdPartyData.setId(request.getRequestId());
             thirdPartyData.setHasAttachments(true);
-            thirdPartyData.setConfigurationId(pnIoConnectorConfig.getIoConfigurationId());
+            thirdPartyData.setConfigurationId(ioServiceConfigurationResolver.getConfigurationId(request.getSenderServiceId()));
             content.setThirdPartyData(thirdPartyData);
         }
 
         if (request.getPaymentData() != null) {
             MessageSendRequest.PaymentData pd = request.getPaymentData();
-            Payee payee = new Payee();
-            payee.setFiscalCode(pd.getCreditorTaxId());
             PaymentData paymentData = new PaymentData();
             paymentData.setAmount(pd.getAmount());
             paymentData.setNoticeNumber(pd.getNoticeCode());
             paymentData.setInvalidAfterDueDate(pd.getInvalidAfterDueDate());
-            paymentData.setPayee(payee);
+            if (isPayeeRequired(request.getSenderServiceId(), pd.getCreditorTaxId())) {
+                Payee payee = new Payee();
+                payee.setFiscalCode(pd.getCreditorTaxId());
+                paymentData.setPayee(payee);
+                log.info("Setting Payee for requestId: {}", request.getRequestId());
+            }
             content.setPaymentData(paymentData);
         }
 
@@ -81,6 +84,11 @@ public class IOService {
         newMessage.setFeatureLevelType("ADVANCED");
 
         return ioClient.sendMessage(newMessage, apiKey);
+    }
+
+    private boolean isPayeeRequired(String senderServiceId, String creditorTaxId) {
+        String organizationFiscalCode = ioServiceConfigurationResolver.getOrganizationFiscalCode(senderServiceId);
+        return !organizationFiscalCode.equalsIgnoreCase(creditorTaxId);
     }
 
     /**

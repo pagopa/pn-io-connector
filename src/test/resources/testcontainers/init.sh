@@ -15,6 +15,7 @@ DYNAMODB_TABLES=(
 )
 SECRETS_NAME="Pn-IO-Connector-Secrets"
 LEGAL_SECRETS_NAME="Pn-IO-Connector-Legal-Secrets"
+SERVICE_CONFIGURATIONS_PARAM="IoConnectorServiceConfiguration"
 
 SQS_QUEUES=(
   "pn-io-connector-send-queue"
@@ -149,6 +150,37 @@ initialize_secrets() {
   create_secret "$LEGAL_SECRETS_NAME" '{"IoApiKey":"test-legal-api-key","IoActApiKey":"test-optin-api-key","IoWhiteList":"*"}' || return 1
 }
 
+create_parameter() {
+  local parameter_name=$1
+  local parameter_value=$2
+
+  log "Creating SSM parameter: $parameter_name"
+  if ! aws ssm put-parameter \
+    --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" \
+    --endpoint-url "$LOCALSTACK_ENDPOINT" \
+    --name "$parameter_name" \
+    --type String \
+    --overwrite \
+    --value "$parameter_value" ; then
+    log "Failed to create SSM parameter: $parameter_name"
+    return 1
+  else
+    log "SSM parameter created: $parameter_name"
+  fi
+}
+
+initialize_ssm() {
+  log "Initializing SSM Parameter Store"
+  create_parameter "$SERVICE_CONFIGURATIONS_PARAM" '{
+    "SVC-001":{"configurationId":"01KTNGX3FQV0R3RG8SH1XE3GXS","organizationFiscalCode":"12345678910"},
+    "SVC-INT-001":{"configurationId":"01KTNGX3FQV0R3RG8SH1XE3GXS","organizationFiscalCode":"12345678910"},
+    "SVC-IDEM-001":{"configurationId":"01KTNGX3FQV0R3RG8SH1XE3GXS","organizationFiscalCode":"12345678910"},
+    "SVC-CONF-001":{"configurationId":"01KTNGX3FQV0R3RG8SH1XE3GXS","organizationFiscalCode":"12345678910"},
+    "000000000":{"configurationId":"01KTNGX3FQV0R3RG8SH1XE3GXS","organizationFiscalCode":"12345678910"}
+  }' || return 1
+}
+
 initialize_dynamo() {
   log "Initializing DynamoDB tables"
   local return_code=0
@@ -196,6 +228,7 @@ initialize_sqs() {
 main() {
   initialize_dynamo || { log "Failed to initialize DynamoDB"; exit 1; }
   initialize_secrets || { log "Failed to initialize Secrets Manager"; exit 1; }
+  initialize_ssm || { log "Failed to initialize SSM Parameter Store"; exit 1; }
   initialize_sqs || { log "Failed to initialize SQS"; exit 1; }
   log "Initialization completed successfully"
 }

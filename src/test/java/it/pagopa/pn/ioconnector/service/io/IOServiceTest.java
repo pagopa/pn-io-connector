@@ -1,5 +1,6 @@
 package it.pagopa.pn.ioconnector.service.io;
 
+import it.pagopa.pn.ioconnector.config.IoServiceConfigurationResolver;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ExternalMessageResponseWithContent;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.MessageContent;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
@@ -28,7 +29,7 @@ import static org.mockito.Mockito.when;
 class IOServiceTest {
 
     @Mock private IOClient ioClient;
-    @Mock private it.pagopa.pn.ioconnector.config.PnIoConnectorConfig pnIoConnectorConfig;
+    @Mock private IoServiceConfigurationResolver ioServiceConfigurationResolver;
     @InjectMocks private IOService ioService;
 
     private static final String API_KEY = "test-api-key";
@@ -43,12 +44,14 @@ class IOServiceTest {
                 .build();
         var request = MessageSendRequest.builder()
                 .recipientTaxId("RSSMRA80A01H501U")
+                .senderServiceId("SVC-001")
                 .subject("Avviso di pagamento")
                 .markdown("Testo del messaggio")
                 .dueDate("2026-06-30T23:59:59Z")
                 .paymentData(paymentData)
                 .build();
 
+        when(ioServiceConfigurationResolver.getOrganizationFiscalCode("SVC-001")).thenReturn("12345678910");
         when(ioClient.sendMessage(any(NewMessage.class), eq(API_KEY))).thenReturn("IO-MSG-001");
 
         String result = ioService.sendMessage(request, API_KEY);
@@ -196,11 +199,13 @@ class IOServiceTest {
         var request = MessageSendRequest.builder()
                 .requestId("REQ-ATTACH-001")
                 .recipientTaxId("RSSMRA80A01H501U")
+                .senderServiceId("SVC-001")
                 .subject("Con allegati")
                 .markdown("Testo")
                 .attachments(List.of(attachment))
                 .build();
 
+        when(ioServiceConfigurationResolver.getConfigurationId("SVC-001")).thenReturn("CONF-001");
         when(ioClient.sendMessage(any(NewMessage.class), eq(API_KEY))).thenReturn("IO-MSG-003");
 
         ioService.sendMessage(request, API_KEY);
@@ -212,5 +217,6 @@ class IOServiceTest {
         assertThat(thirdPartyData).isNotNull();
         assertThat(thirdPartyData.getId()).isEqualTo("REQ-ATTACH-001");
         assertThat(thirdPartyData.getHasAttachments()).isTrue();
+        assertThat(thirdPartyData.getConfigurationId()).isEqualTo("CONF-001");
     }
 }

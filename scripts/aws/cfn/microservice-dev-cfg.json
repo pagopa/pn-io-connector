@@ -2,6 +2,7 @@
   "Parameters" : {
     "PnIoConnectorSecretsName":"Pn-Io-Connector-Secrets",
     "PnIoConnectorLegalSecretsName":"Pn-Io-Connector-Legal-Secrets",
+    "PnIoConnectorServiceConfigurationsParameterName":"IoConnectorServiceConfiguration",
     "PnCommonsRetryMaxAttempts":"3",
     "PnCommonsConnectionTimeoutMillis":"10000",
     "PnCommonsReadTimeoutMillis":"30000",
