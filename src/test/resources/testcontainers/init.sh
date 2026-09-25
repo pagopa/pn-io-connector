@@ -11,8 +11,10 @@ LOCALSTACK_ENDPOINT="http://localhost:4566"
 ## DEFINITIONS ##
 DYNAMODB_TABLES=(
   "pn-IOConnectorRequests:requestId"
+  "pn-IOConnectorOptIn:pk"
 )
 SECRETS_NAME="Pn-IO-Connector-Secrets"
+LEGAL_SECRETS_NAME="Pn-IO-Connector-Legal-Secrets"
 SERVICE_CONFIGURATIONS_PARAM="IoConnectorServiceConfiguration"
 
 SQS_QUEUES=(
@@ -94,6 +96,32 @@ add_dynamodb_gsi() {
   log "GSI '$gsi_name' added to table: $table_name"
 }
 
+enable_dynamodb_ttl() {
+  local table_name=$1
+  local ttl_attribute=$2
+
+  log "Enabling TTL on attribute '$ttl_attribute' for table: $table_name"
+
+  if silent aws dynamodb describe-time-to-live \
+    --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" \
+    --endpoint-url "$LOCALSTACK_ENDPOINT" \
+    --table-name "$table_name" \
+    --query "TimeToLiveDescription.TimeToLiveStatus" \
+    --output text | grep -q "ENABLED"; then
+    log "TTL already enabled on table: $table_name"
+    return 0
+  fi
+
+  aws dynamodb update-time-to-live \
+    --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" \
+    --endpoint-url "$LOCALSTACK_ENDPOINT" \
+    --table-name "$table_name" \
+    --time-to-live-specification "Enabled=true,AttributeName=$ttl_attribute"
+  log "TTL enabled on table: $table_name"
+}
+
 create_secret() {
   local secret_name=$1
   local secret_value=$2
@@ -119,6 +147,7 @@ create_secret() {
 initialize_secrets() {
   log "Initializing Secrets Manager"
   create_secret "$SECRETS_NAME" '{"io-api-key":"test-api-key"}' || return 1
+  create_secret "$LEGAL_SECRETS_NAME" '{"IoApiKey":"test-legal-api-key","IoActApiKey":"test-optin-api-key","IoWhiteList":"*"}' || return 1
 }
 
 create_parameter() {
@@ -164,6 +193,7 @@ initialize_dynamo() {
   done
 
   add_dynamodb_gsi "pn-IOConnectorRequests" "ioMessageIdIndex" "ioMessageId" || return_code=1
+  enable_dynamodb_ttl "pn-IOConnectorOptIn" "i_ttl" || return_code=1
 
   return $return_code
 }

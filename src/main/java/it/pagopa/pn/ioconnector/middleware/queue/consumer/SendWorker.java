@@ -6,8 +6,10 @@ import io.awspring.cloud.sqs.annotation.SqsListener;
 import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.commons.exceptions.PnRuntimeException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoGetProfileException;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
@@ -20,6 +22,7 @@ import it.pagopa.pn.ioconnector.service.DataVaultService;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.messaging.Message;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -40,6 +43,8 @@ import static it.pagopa.pn.commons.exceptions.PnExceptionsCodes.ERROR_CODE_PN_GE
 @CustomLog
 @RequiredArgsConstructor
 public class SendWorker {
+
+    private static final String RETRY_EXHAUSTED_ERROR_DETAIL = "Retry Exhausted";
 
     private final IOService ioService;
     private final DataVaultService dataVaultService;
@@ -75,10 +80,12 @@ public class SendWorker {
             MessageSendRequest requestToSend = message.getPayload();
             requestToSend.setRecipientTaxId(taxId);
             ioMessageId = ioService.sendMessage(requestToSend, apiKey);
-        } catch (PnHttpResponseException | PnDataVaultException ex) {
-            int statusCode = ex.getProblem().getStatus();
+        } catch (PnHttpResponseException | PnDataVaultException | PnIoGetProfileException ex) {
+            int statusCode = resolveStatusCode(ex);
             if (!isRetryable(statusCode)) {
-                throw ex;
+                handleFailedToSend(request, statusCode, ex);
+                acknowledgement.acknowledge();
+                return;
             }
             IOConnectorRequestEntity entity = dao.findById(request.getRequestId()).orElse(null);
             int currentStep = (entity != null && entity.getRetryStep() != null) ? entity.getRetryStep() : 0;
@@ -236,11 +243,7 @@ public class SendWorker {
 
     private void handleRetryExhausted(MessageSendRequest request) {
         log.error("Long retry exhausted for requestId={}", request.getRequestId());
-        dao.update(IOConnectorRequestEntity.builder()
-                .requestId(request.getRequestId())
-                .status(EventType.IO_SEND_RETRY_EXHAUSTED.name())
-                .eventList(appendEvent(request.getRequestId(), EventType.IO_SEND_RETRY_EXHAUSTED))
-                .build());
+        markFailedToSend(request, RETRY_EXHAUSTED_ERROR_DETAIL);
     }
 
     private void handleSenderNotAllowed(MessageSendRequest request) {
@@ -261,5 +264,43 @@ public class SendWorker {
 
         log.info("Sender not allowed for requestId={} iun={}",
                 request.getRequestId(), request.getIun());
+    }
+
+    private void handleFailedToSend(MessageSendRequest request, int statusCode, PnRuntimeException ex) {
+        log.error("Error while trying to send message to IO for requestId={} iun={} statusCode={} detail={}",
+                request.getRequestId(), request.getIun(), statusCode, ex.getMessage(), ex);
+        markFailedToSend(request, buildErrorDetail(statusCode, ex));
+    }
+
+    private int resolveStatusCode(PnRuntimeException ex) {
+        Integer status = ex.getProblem() != null ? ex.getProblem().getStatus() : null;
+        return status != null ? status : HttpStatus.INTERNAL_SERVER_ERROR.value();
+    }
+
+    private String buildErrorDetail(int statusCode, PnRuntimeException ex) {
+        String description = ex.getProblem() != null && StringUtils.hasText(ex.getProblem().getDetail())
+                ? ex.getProblem().getDetail()
+                : ex.getMessage();
+        return statusCode + " - " + description;
+    }
+
+    private void markFailedToSend(MessageSendRequest request, String errorDetail) {
+        dao.update(IOConnectorRequestEntity.builder()
+                .requestId(request.getRequestId())
+                .status(EventType.FAILED_TO_SEND.name())
+                .eventList(appendEvent(request.getRequestId(), EventType.FAILED_TO_SEND))
+                .build());
+
+        if (EventType.FAILED_TO_SEND.isNotify()) {
+            OutcomeEvent outcomeEvent = OutcomeEvent.builder()
+                    .requestId(request.getRequestId())
+                    .xPagopaIoConCxId(request.getXPagopaIoConCxId())
+                    .noticeCode(extractNoticeCode(request))
+                    .eventType(EventType.FAILED_TO_SEND)
+                    .eventTimestamp(Instant.now())
+                    .errorDetail(errorDetail)
+                    .build();
+            eventBridgeProducer.publish(outcomeEvent);
+        }
     }
 }

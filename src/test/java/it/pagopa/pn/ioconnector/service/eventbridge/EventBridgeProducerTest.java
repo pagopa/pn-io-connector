@@ -59,4 +59,27 @@ class EventBridgeProducerTest {
         assertThat(request.entries().get(0).eventBusName()).isEqualTo("pn-io-connector-bus");
         assertThat(request.entries().get(0).detailType()).isEqualTo("IoConnectorOutcomeEvent");
     }
+
+    @Test
+    void publish_serializesErrorDetail() {
+        when(config.getEventBridgeBusName()).thenReturn("pn-io-connector-bus");
+        when(eventBridgeClient.putEvents(any(PutEventsRequest.class)))
+                .thenReturn(PutEventsResponse.builder().failedEntryCount(0).build());
+
+        OutcomeEvent event = OutcomeEvent.builder()
+                .requestId("REQ-002")
+                .xPagopaIoConCxId("pn-delivery-push")
+                .eventType(EventType.FAILED_TO_SEND)
+                .errorDetail("404 - Not Found")
+                .build();
+
+        eventBridgeProducer.publish(event);
+
+        ArgumentCaptor<PutEventsRequest> captor = ArgumentCaptor.forClass(PutEventsRequest.class);
+        verify(eventBridgeClient).putEvents(captor.capture());
+
+        String detail = captor.getValue().entries().get(0).detail();
+        assertThat(detail).contains("FAILED_TO_SEND");
+        assertThat(detail).contains("\"errorDetail\":\"404 - Not Found\"");
+    }
 }

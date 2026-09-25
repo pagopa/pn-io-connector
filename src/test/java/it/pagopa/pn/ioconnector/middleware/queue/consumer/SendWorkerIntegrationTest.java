@@ -4,17 +4,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
+import it.pagopa.pn.ioconnector.exceptions.PnDataVaultException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoGetProfileException;
 import it.pagopa.pn.ioconnector.localstack.LocalStackTestConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.model.EventType;
 import it.pagopa.pn.ioconnector.model.MessageSendRequest;
+import it.pagopa.pn.ioconnector.model.OutcomeEvent;
 import it.pagopa.pn.ioconnector.service.DataVaultService;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -26,10 +30,10 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -126,7 +130,7 @@ class SendWorkerIntegrationTest {
     }
 
     @Test
-    void longRetry_exhausted_updatesDbWithRetryExhaustedStatusAndNoEventBridge() throws Exception {
+    void longRetry_exhausted_updatesDbWithFailedToSendAndPublishesRetryExhausted() throws Exception {
         MessageSendRequest request = buildRequest("INT-RETRY-003");
         IOConnectorRequestEntity entity = buildEntity("INT-RETRY-003", 4);
         dao.save(entity);
@@ -143,13 +147,18 @@ class SendWorkerIntegrationTest {
 
         Optional<IOConnectorRequestEntity> updated = dao.findById("INT-RETRY-003");
         assertThat(updated).isPresent();
-        assertThat(updated.get().getStatus()).isEqualTo(EventType.IO_SEND_RETRY_EXHAUSTED.name());
+        assertThat(updated.get().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+        assertThat(updated.get().getEventList()).hasSize(1);
+        assertThat(updated.get().getEventList().get(0).getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
 
-        verify(eventBridgeProducer, never()).publish(any());
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("Retry Exhausted");
     }
 
     @Test
-    void nonRetryable_4xx_propagatesExceptionWithoutDbUpdate() throws Exception {
+    void nonRetryable_4xx_persistsFailedToSendPublishesEventAndAcks() throws Exception {
         MessageSendRequest request = buildRequest("INT-RETRY-004");
         IOConnectorRequestEntity entity = buildEntity("INT-RETRY-004", 0);
         dao.save(entity);
@@ -162,14 +171,131 @@ class SendWorkerIntegrationTest {
         when(ioService.sendMessage(eq(request), eq("test-api-key")))
                 .thenThrow(new PnHttpResponseException("Bad Request", 400));
 
-        assertThatThrownBy(() -> sendWorker.process(message, acknowledgement))
-                .isInstanceOf(PnHttpResponseException.class)
-                .satisfies(e -> assertThat(((PnHttpResponseException) e).getStatusCode()).isEqualTo(400));
+        sendWorker.process(message, acknowledgement);
 
         Optional<IOConnectorRequestEntity> fromDb = dao.findById("INT-RETRY-004");
         assertThat(fromDb).isPresent();
         assertThat(fromDb.get().getRetryStep()).isEqualTo(0);
-        assertThat(fromDb.get().getStatus()).isEqualTo("ACCEPTED");
+        assertThat(fromDb.get().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+        assertThat(fromDb.get().getEventList()).hasSize(1);
+        assertThat(fromDb.get().getEventList().get(0).getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getEventType()).isEqualTo(EventType.FAILED_TO_SEND);
+        assertThat(outcomeCaptor.getValue().getRequestId()).isEqualTo("INT-RETRY-004");
+        assertThat(outcomeCaptor.getValue().getXPagopaIoConCxId()).isEqualTo("pn-delivery-push");
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("400 - Bad Request");
+
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void nonRetryable_checkUserProfile_403_persistsFailedToSend() throws Exception {
+        MessageSendRequest request = buildRequest("INT-RETRY-006");
+        dao.save(buildEntity("INT-RETRY-006", 0));
+
+        String receiptHandle = enqueueAndReceive(request);
+        Message<MessageSendRequest> message = buildMessage(request, receiptHandle);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(ioService.checkUserProfile(eq(request.getRecipientTaxId()), eq("test-api-key")))
+                .thenThrow(new PnHttpResponseException("Forbidden", 403));
+
+        sendWorker.process(message, acknowledgement);
+
+        Optional<IOConnectorRequestEntity> fromDb = dao.findById("INT-RETRY-006");
+        assertThat(fromDb).isPresent();
+        assertThat(fromDb.get().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+        assertThat(fromDb.get().getEventList()).hasSize(1);
+        assertThat(fromDb.get().getEventList().get(0).getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+
+        verify(ioService, never()).sendMessage(any(), any());
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("403 - Forbidden");
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void nonRetryable_checkUserProfile_getProfileException_403_persistsFailedToSend() throws Exception {
+        MessageSendRequest request = buildRequest("INT-RETRY-009");
+        dao.save(buildEntity("INT-RETRY-009", 0));
+
+        String receiptHandle = enqueueAndReceive(request);
+        Message<MessageSendRequest> message = buildMessage(request, receiptHandle);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(ioService.checkUserProfile(eq(request.getRecipientTaxId()), eq("test-api-key")))
+                .thenThrow(new PnIoGetProfileException(403, "Forbidden"));
+
+        sendWorker.process(message, acknowledgement);
+
+        Optional<IOConnectorRequestEntity> fromDb = dao.findById("INT-RETRY-009");
+        assertThat(fromDb).isPresent();
+        assertThat(fromDb.get().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+
+        verify(ioService, never()).sendMessage(any(), any());
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getErrorDetail())
+                .isEqualTo("403 - Errore in fase di POST/profile su IO");
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void nonRetryable_deanonymize_400_persistsFailedToSend() throws Exception {
+        MessageSendRequest request = buildRequest("INT-RETRY-007");
+        dao.save(buildEntity("INT-RETRY-007", 0));
+
+        String receiptHandle = enqueueAndReceive(request);
+        Message<MessageSendRequest> message = buildMessage(request, receiptHandle);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(dataVaultService.deanonymize(request.getRecipientTaxId()))
+                .thenThrow(new PnDataVaultException(400, "Bad Request"));
+
+        sendWorker.process(message, acknowledgement);
+
+        Optional<IOConnectorRequestEntity> fromDb = dao.findById("INT-RETRY-007");
+        assertThat(fromDb).isPresent();
+        assertThat(fromDb.get().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+
+        verify(ioService, never()).checkUserProfile(anyString(), anyString());
+        ArgumentCaptor<OutcomeEvent> outcomeCaptor = ArgumentCaptor.forClass(OutcomeEvent.class);
+        verify(eventBridgeProducer).publish(outcomeCaptor.capture());
+        assertThat(outcomeCaptor.getValue().getErrorDetail()).isEqualTo("400 - Errore chiamata a DataVault");
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void failedToSend_appendsEventToExistingEventList() throws Exception {
+        MessageSendRequest request = buildRequest("INT-RETRY-008");
+        IOConnectorRequestEntity entity = buildEntity("INT-RETRY-008", 0);
+        entity.setEventList(List.of(IOConnectorRequestEntity.Event.builder()
+                .eventDate(Instant.now().toString())
+                .status(EventType.ACCEPTED.name())
+                .build()));
+        dao.save(entity);
+
+        String receiptHandle = enqueueAndReceive(request);
+        Message<MessageSendRequest> message = buildMessage(request, receiptHandle);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(ioService.checkUserProfile(eq(request.getRecipientTaxId()), eq("test-api-key"))).thenReturn(buildAllowedProfile());
+        when(ioService.sendMessage(eq(request), eq("test-api-key")))
+                .thenThrow(new PnHttpResponseException("Bad Request", 400));
+
+        sendWorker.process(message, acknowledgement);
+
+        Optional<IOConnectorRequestEntity> fromDb = dao.findById("INT-RETRY-008");
+        assertThat(fromDb).isPresent();
+        assertThat(fromDb.get().getEventList()).hasSize(2);
+        assertThat(fromDb.get().getEventList().get(0).getStatus()).isEqualTo(EventType.ACCEPTED.name());
+        assertThat(fromDb.get().getEventList().get(1).getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+        assertThat(fromDb.get().getStatus()).isEqualTo(EventType.FAILED_TO_SEND.name());
+
+        verify(acknowledgement).acknowledge();
     }
 
     @Test
