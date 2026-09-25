@@ -168,6 +168,14 @@ Parameters:
     Type: String
     Description: 'ARN of DynamoDB table pn-IOConnectorRequests (from storage.yml output)'
 
+  PnIoConnectorOptInTableName:
+    Type: String
+    Description: 'Name of DynamoDB table pn-IOConnectorOptIn (from storage.yml output)'
+
+  PnIoConnectorOptInTableArn:
+    Type: String
+    Description: 'ARN of DynamoDB table pn-IOConnectorOptIn (from storage.yml output)'
+
   PnIoConnectorSendQueueName:
     Type: String
     Description: 'Name of SQS queue pn-io-connector-send-queue (from storage.yml output)'
@@ -314,6 +322,7 @@ Resources:
         ContainerEnvEntry13: !Sub 'PN_IO_CONNECTOR_IO_BASE_URL=${PnIoConnectorIoBaseUrl}'
         ContainerEnvEntry14: !Sub 'PN_IO_CONNECTOR_LEGAL_SECRETS_NAME=${PnIoConnectorLegalSecretsName}'
         ContainerEnvEntry15: !Sub 'PN_IO_CONNECTOR_IO_LEGAL_BASE_URL=${PnIoConnectorIoLegalBaseUrl}'
+        ContainerEnvEntry16: !Sub 'PN_IO_CONNECTOR_OPTIN_DYNAMODB_TABLE_NAME=${PnIoConnectorOptInTableName}'
         MappedPaths: '/io-connector/message*,/io-connector/profile*,/io-connector/activations*,/io-connector/user-status*,/io-connector/sendmessage*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
@@ -357,6 +366,7 @@ Resources:
             Resource:
               - !Ref PnIoConnectorRequestsTableArn
               - !Sub '${PnIoConnectorRequestsTableArn}/index/*'
+              - !Ref PnIoConnectorOptInTableArn
           - Effect: Allow
             Action:
               - sqs:ReceiveMessage

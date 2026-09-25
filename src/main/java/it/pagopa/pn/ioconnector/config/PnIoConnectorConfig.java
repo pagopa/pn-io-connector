@@ -34,6 +34,7 @@ public class PnIoConnectorConfig {
     private String ioLegalBaseUrl;
     private String dataVaultBaseUrl;
     private String dynamodbTableName;
+    private String optinDynamodbTableName;
     @NotBlank
     private String sqsSendQueueName;
     private String sqsPollingQueueName;
@@ -44,6 +45,7 @@ public class PnIoConnectorConfig {
     private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
     private String ioConfigurationId;
+    private int ioOptinMinDays;
 
     /**
      * Comunicazioni Bonarie
