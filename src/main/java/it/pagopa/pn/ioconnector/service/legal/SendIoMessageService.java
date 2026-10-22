@@ -17,9 +17,11 @@ import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.MANAGE_OPT_IN;
 
@@ -28,27 +30,35 @@ import static it.pagopa.pn.ioconnector.utils.LogUtils.MANAGE_OPT_IN;
 @RequiredArgsConstructor
 public class SendIoMessageService {
 
+    private static final String IO_LOCALE_IT_IT = "it_IT";
+
     private final PnIoConnectorConfig config;
     private final IOConnectorOptInDao ioConnectorOptInDAO;
     private final IOLegalClient ioLegalClient;
 
     public UserStatusResponse getUserStatus(UserStatusRequest request) {
         String taxId = request.getTaxId();
-        UserStatusResponse.StatusEnum status;
+        return new UserStatusResponse().taxId(taxId).status(getUserStatusInternal(taxId).status());
+    }
+
+    UserStatusInternal getUserStatusInternal(String taxId) {
         try {
             LimitedProfile profile = ioLegalClient.getProfile(new FiscalCodePayload().fiscalCode(taxId));
-            status = Boolean.TRUE.equals(profile.getSenderAllowed())
+            UserStatusResponse.StatusEnum status = Boolean.TRUE.equals(profile.getSenderAllowed())
                     ? UserStatusResponse.StatusEnum.PN_ACTIVE
                     : UserStatusResponse.StatusEnum.PN_NOT_ACTIVE;
+            return new UserStatusInternal(status, profile.getPreferredLanguages());
         } catch (PnHttpResponseException e) {
             if (e.getStatusCode() == 404) {
-                status = UserStatusResponse.StatusEnum.APPIO_NOT_ACTIVE;
-            } else {
-                log.warn("getUserStatus failed for taxId={} - status={}", LogUtils.maskTaxId(taxId), e.getStatusCode());
-                status = UserStatusResponse.StatusEnum.ERROR;
+                return new UserStatusInternal(UserStatusResponse.StatusEnum.APPIO_NOT_ACTIVE, null);
             }
+            log.warn("getUserStatus failed for taxId={} - status={}", LogUtils.maskTaxId(taxId), e.getStatusCode());
+            return new UserStatusInternal(UserStatusResponse.StatusEnum.ERROR, null);
         }
-        return new UserStatusResponse().taxId(taxId).status(status);
+    }
+
+    static boolean isPreferredLanguageIT(List<String> preferredLanguages) {
+        return CollectionUtils.isEmpty(preferredLanguages) || preferredLanguages.contains(IO_LOCALE_IT_IT);
     }
 
     public SendMessageResponse sendMessage(SendMessageRequest request) {

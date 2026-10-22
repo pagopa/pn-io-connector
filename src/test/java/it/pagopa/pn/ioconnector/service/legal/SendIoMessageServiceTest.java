@@ -14,14 +14,21 @@ import it.pagopa.pn.ioconnector.middleware.msclient.IOLegalClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -162,5 +169,76 @@ class SendIoMessageServiceTest {
 
         assertThat(result.getTaxId()).isEqualTo(TAX_ID);
         assertThat(result.getStatus()).isEqualTo(UserStatusResponse.StatusEnum.ERROR);
+    }
+
+    @Test
+    void getUserStatusInternal_pnActive_returnsPreferredLanguages() {
+        when(ioLegalClient.getProfile(any(FiscalCodePayload.class)))
+                .thenReturn(new LimitedProfile().senderAllowed(true).preferredLanguages(List.of("en_GB", "it_IT")));
+
+        UserStatusInternal result = sendIoMessageService.getUserStatusInternal(TAX_ID);
+
+        assertThat(result.status()).isEqualTo(UserStatusResponse.StatusEnum.PN_ACTIVE);
+        assertThat(result.preferredLanguages()).containsExactly("en_GB", "it_IT");
+    }
+
+    @Test
+    void getUserStatusInternal_pnNotActive_returnsPreferredLanguages() {
+        when(ioLegalClient.getProfile(any(FiscalCodePayload.class)))
+                .thenReturn(new LimitedProfile().senderAllowed(false).preferredLanguages(List.of("en_GB")));
+
+        UserStatusInternal result = sendIoMessageService.getUserStatusInternal(TAX_ID);
+
+        assertThat(result.status()).isEqualTo(UserStatusResponse.StatusEnum.PN_NOT_ACTIVE);
+        assertThat(result.preferredLanguages()).containsExactly("en_GB");
+    }
+
+    @Test
+    void getUserStatusInternal_appioNotActive_hasNoPreferredLanguages() {
+        when(ioLegalClient.getProfile(any(FiscalCodePayload.class)))
+                .thenThrow(new PnHttpResponseException("Not Found", 404));
+
+        UserStatusInternal result = sendIoMessageService.getUserStatusInternal(TAX_ID);
+
+        assertThat(result.status()).isEqualTo(UserStatusResponse.StatusEnum.APPIO_NOT_ACTIVE);
+        assertThat(result.preferredLanguages()).isNull();
+    }
+
+    @Test
+    void getUserStatusInternal_error_hasNoPreferredLanguages() {
+        when(ioLegalClient.getProfile(any(FiscalCodePayload.class)))
+                .thenThrow(new PnHttpResponseException("Internal Server Error", 500));
+
+        UserStatusInternal result = sendIoMessageService.getUserStatusInternal(TAX_ID);
+
+        assertThat(result.status()).isEqualTo(UserStatusResponse.StatusEnum.ERROR);
+        assertThat(result.preferredLanguages()).isNull();
+    }
+
+    @Test
+    void getUserStatus_nonHttpError_isPropagated() {
+        when(ioLegalClient.getProfile(any(FiscalCodePayload.class)))
+                .thenThrow(new IllegalStateException("connection reset"));
+        UserStatusRequest request = new UserStatusRequest(TAX_ID);
+
+        assertThrows(IllegalStateException.class,
+                () -> sendIoMessageService.getUserStatus(request));
+    }
+
+    static Stream<Arguments> preferredLanguages() {
+        return Stream.of(
+                arguments(null, true),
+                arguments(List.of(), true),
+                arguments(List.of("it_IT"), true),
+                arguments(List.of("en_GB"), false),
+                arguments(List.of("en_GB", "it_IT"), true),
+                arguments(List.of("de_DE", "fr_FR"), false)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("preferredLanguages")
+    void isPreferredLanguageIT(List<String> preferredLanguages, boolean expected) {
+        assertThat(SendIoMessageService.isPreferredLanguageIT(preferredLanguages)).isEqualTo(expected);
     }
 }
