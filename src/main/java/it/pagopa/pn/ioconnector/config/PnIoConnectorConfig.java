@@ -49,6 +49,13 @@ public class PnIoConnectorConfig {
     private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
     private int ioOptinMinDays;
+    private boolean enableIoMessage;
+    private boolean enableIoActivationMessage;
+    private String ioRemoteContentCfgId;
+    private String piattaformanotificheurlCittadini;
+    private String piattaformanotificheurlTos;
+    private String piattaformanotificheurlPrivacy;
+    private String sqsDeliveryPushInputQueueName;
 
     /**
      * Comunicazioni Bonarie

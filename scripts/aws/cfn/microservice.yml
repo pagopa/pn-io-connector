@@ -243,6 +243,29 @@ Parameters:
     Type: String
     Description: 'ARN of SQS queue pn-io-connector-polling-queue (from storage.yml output)'
 
+  # -- Dominio legale: invio messaggi ------------------------------------------------
+  DeliveryPushInputsQueueName:
+    Type: String
+    Description: 'Queue to pull for inputs event'
+
+  DeliveryPushInputsQueueARN:
+    Type: String
+    Description: 'Queue to pull for inputs event'
+
+  IoRemoteContentCfgId:
+    Type: String
+    Description: 'Identificativo di configurazione per inviare messaggi su IO'
+    Default: "01HMVMHCZZ8D0VTFWMRHBM5D6F"
+
+  PortalUrl:
+    Type: String
+    Description: 'Url del portale cittadini da inserire negli avvisi a IO'
+
+  SendPortalUrl:
+    Type: String
+    Description: 'Url del portale SEND da inserire negli avvisi verso appIO'
+    Default: 'https://notifichedigitali.pagopa.it'
+
   # -- Lambda downloadAttachment params ----------------------------------------------
   SandboxSafeStorageBaseUrl:
     Type: String
@@ -328,6 +351,11 @@ Resources:
         ContainerEnvEntry15: !Sub 'PN_IO_CONNECTOR_IO_LEGAL_BASE_URL=${PnIoConnectorIoLegalBaseUrl}'
         ContainerEnvEntry16: !Sub 'PN_IO_CONNECTOR_OPTIN_DYNAMODB_TABLE_NAME=${PnIoConnectorOptInTableName}'
         ContainerEnvEntry17: !Sub 'PN_IO_CONNECTOR_SERVICE_CONFIGURATIONS_PARAMETER_NAME=${PnIoConnectorServiceConfigurationsParameterName}'
+        ContainerEnvEntry18: !Sub 'PN_IO_CONNECTOR_SQS_DELIVERY_PUSH_INPUT_QUEUE_NAME=${DeliveryPushInputsQueueName}'
+        ContainerEnvEntry19: !Sub 'PN_IO_CONNECTOR_IO_REMOTE_CONTENT_CFG_ID=${IoRemoteContentCfgId}'
+        ContainerEnvEntry20: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_TOS=${PortalUrl}/termini-di-servizio'
+        ContainerEnvEntry21: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_PRIVACY=${PortalUrl}/informativa-privacy'
+        ContainerEnvEntry22: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_CITTADINI=${SendPortalUrl}/cittadini'
         MappedPaths: '/io-connector/message*,/io-connector/profile*,/io-connector/activations*,/io-connector/user-status*,/io-connector/sendmessage*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
@@ -345,7 +373,7 @@ Resources:
   PnIoConnectorManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: 'Managed policy granting pn-io-connector access to S3, SSM, DynamoDB, SQS, Secrets Manager and EventBridge'
+      Description: 'Managed policy granting pn-io-connector access to S3, SSM, DynamoDB, SQS, Secrets Manager, EventBridge and CloudWatch metrics'
       ManagedPolicyName: !Ref PnIoConnectorManagedPolicyName
       PolicyDocument:
         Version: 2012-10-17
@@ -406,6 +434,18 @@ Resources:
               - sqs:GetQueueAttributes
               - sqs:ChangeMessageVisibility
             Resource: !Ref PnIoConnectorPollingQueueArn
+          - Effect: Allow
+            Sid: 'WriteToDeliveryPushInputsQueue'
+            Action:
+              - sqs:SendMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+            Resource: !Ref DeliveryPushInputsQueueARN
+          - Effect: Allow
+            Action:
+              - cloudwatch:PutMetricData
+            Resource:
+              - "*"
 
   PnIoConnectorIoApi:
     Type: AWS::CloudFormation::Stack
