@@ -57,7 +57,7 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     @Test
     void completeSecret_isParsedWithDeclaredJsonNames() {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"CF1,CF2"}""");
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"CF1,CF2","OneTrustToken":"ot-token"}""");
 
         IoLegalSecrets secrets = config.ioLegalSecrets(secretsManagerClient, objectMapper);
 
@@ -67,9 +67,36 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     }
 
     @Test
+    void secretWithOneTrustToken_exposesTheToken() {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"*","OneTrustToken":"ot-token"}""");
+
+        IoLegalSecrets secrets = config.ioLegalSecrets(secretsManagerClient, objectMapper);
+
+        assertEquals("ot-token", secrets.oneTrustToken());
+    }
+
+    @Test
+    void secretWithoutOneTrustToken_failsStartup() {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"*"}""");
+
+        assertStartupFails();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void blankOneTrustToken_failsStartup(String token) {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"*","OneTrustToken":"%s"}""".formatted(token));
+
+        assertStartupFails();
+    }
+
+    @Test
     void whitelistInExternalRegistriesFormat_enablesFilter() {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"BSTLSS72M29L736X, TRRMTT71R09A944J"}""");
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"BSTLSS72M29L736X, TRRMTT71R09A944J","OneTrustToken":"ot-token"}""");
 
         IoWhitelistChecker checker = config.ioWhitelistChecker(config.ioLegalSecrets(secretsManagerClient, objectMapper));
 
@@ -82,7 +109,7 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     @Test
     void wildcardWhitelist_disablesFilter() {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"*"}""");
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"*","OneTrustToken":"ot-token"}""");
 
         IoWhitelistChecker checker = config.ioWhitelistChecker(config.ioLegalSecrets(secretsManagerClient, objectMapper));
 
@@ -93,7 +120,7 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     @Test
     void missingWhitelist_failsStartup() {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"key-optin"}""");
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","OneTrustToken":"ot-token"}""");
 
         assertStartupFails();
     }
@@ -102,7 +129,7 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     @ValueSource(strings = {"", "   ", " , "})
     void emptyWhitelist_failsStartup(String whitelist) {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"%s"}""".formatted(whitelist));
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"%s","OneTrustToken":"ot-token"}""".formatted(whitelist));
 
         assertStartupFails();
     }
@@ -110,17 +137,17 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     @Test
     void whitelistKeyWithDifferentCase_isIgnored_andFailsStartupListingTheKeysFound() {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhitelist":"CF1,CF2"}""");
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhitelist":"CF1,CF2","OneTrustToken":"ot-token"}""");
 
         PnInternalException ex = assertStartupFails();
 
-        assertTrue(ex.getProblem().getDetail().contains("[IoApiKey, IoActApiKey, IoWhitelist]"));
+        assertTrue(ex.getProblem().getDetail().contains("[IoApiKey, IoActApiKey, IoWhitelist, OneTrustToken]"));
     }
 
     @Test
     void whitelistAsJsonArray_failsStartup() {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":["CF1","CF2"]}""");
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":["CF1","CF2"],"OneTrustToken":"ot-token"}""");
 
         assertStartupFails();
     }
@@ -128,7 +155,7 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     @Test
     void missingIoApiKey_failsStartup() {
         mockSecret("""
-                {"IoActApiKey":"key-optin","IoWhiteList":"*"}""");
+                {"IoActApiKey":"key-optin","IoWhiteList":"*","OneTrustToken":"ot-token"}""");
 
         assertStartupFails();
     }
@@ -136,7 +163,7 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     @Test
     void blankIoActApiKey_failsStartup() {
         mockSecret("""
-                {"IoApiKey":"key-legal","IoActApiKey":"  ","IoWhiteList":"*"}""");
+                {"IoApiKey":"key-legal","IoActApiKey":"  ","IoWhiteList":"*","OneTrustToken":"ot-token"}""");
 
         assertStartupFails();
     }

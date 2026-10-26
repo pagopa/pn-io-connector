@@ -1,14 +1,19 @@
 package it.pagopa.pn.ioconnector.middleware.msclient;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import it.pagopa.pn.commons.pnclients.RestClientFactory;
 import it.pagopa.pn.ioconnector.config.IoLegalSecrets;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.datavault.v1.api.RecipientsApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.DefaultApi;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.userattributes.v1.api.ConsentsApi;
 import it.pagopa.pn.ioconnector.middleware.msclient.common.BaseRestClient;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestClient;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class MsClientConfig {
@@ -23,6 +28,37 @@ public class MsClientConfig {
             );
             apiClient.setBasePath(config.getDataVaultBaseUrl());
             return new RecipientsApi(apiClient);
+        }
+    }
+
+    @Configuration
+    static class UserAttributesApis extends BaseRestClient {
+
+        @Bean
+        ConsentsApi consentsApi(PnIoConnectorConfig config) {
+            var apiClient = new it.pagopa.pn.ioconnector.generated.openapi.msclient.userattributes.v1.ApiClient(
+                    initRestClient().build()
+            );
+            apiClient.setBasePath(config.getUserAttributesBaseUrl());
+            return new ConsentsApi(apiClient);
+        }
+    }
+
+    @Configuration
+    static class OneTrustApis extends BaseRestClient {
+
+        @Bean
+        RestClient oneTrustRestClient(PnIoConnectorConfig config,
+                                      RestClientFactory restClientFactory,
+                                      RestClient.Builder restClientBuilder,
+                                      ObjectMapper objectMapper,
+                                      @Value("${pn.commons.connection-timeout-millis}") int connectTimeoutMillis) {
+            return restClientFactory.restClientWithTracing(
+                    config.getOneTrustRetryMaxAttempts(),
+                    connectTimeoutMillis,
+                    config.getOneTrustReadTimeoutMillis(),
+                    restClientBuilder.baseUrl(config.getOneTrustBaseUrl()),
+                    objectMapper);
         }
     }
 
