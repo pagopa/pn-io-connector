@@ -23,5 +23,6 @@ public final class PnIoConnectorExceptionCodes extends PnExceptionsCodes {
 
     public static final String ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR = "PN_IOCONNECTOR_LEGAL_SECRET_ERROR";
     public static final String ERROR_CODE_IOCONNECTOR_NOT_IMPLEMENTED = "PN_IOCONNECTOR_NOT_IMPLEMENTED";
+    public static final String ERROR_CODE_IOCONNECTOR_MISSING_TEMPLATE = "PN_IOCONNECTOR_MISSING_TEMPLATE";
 
 }

@@ -1,0 +1,1 @@
+Hai una comunicazione a valore legale da SEND
