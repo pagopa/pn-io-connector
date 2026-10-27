@@ -18,6 +18,8 @@ import static it.pagopa.pn.ioconnector.service.legal.IoActivationMapper.toActiva
 import static it.pagopa.pn.ioconnector.service.legal.IoActivationMapper.toIoActivationPayload;
 import static it.pagopa.pn.ioconnector.service.legal.IoActivationMapper.toIoFiscalCodePayload;
 import static it.pagopa.pn.ioconnector.service.legal.IoActivationMapper.toUserAttributesCxType;
+import static it.pagopa.pn.ioconnector.utils.LogUtils.GET_IO_ACTIVATION;
+import static it.pagopa.pn.ioconnector.utils.LogUtils.UPSERT_IO_ACTIVATION;
 
 @CustomLog
 @Service
@@ -31,26 +33,42 @@ public class IoActivationService {
     private final UserAttributesConsentClient userAttributesConsentClient;
 
     public Activation getActivation(FiscalCodePayload request) {
-        return toActivation(ioLegalClient.getActivation(toIoFiscalCodePayload(request.getFiscalCode())));
+        log.logStartingProcess(GET_IO_ACTIVATION);
+        try {
+            Activation activation = toActivation(ioLegalClient.getActivation(toIoFiscalCodePayload(request.getFiscalCode())));
+            log.logEndingProcess(GET_IO_ACTIVATION);
+            return activation;
+        } catch (RuntimeException e) {
+            log.logEndingProcess(GET_IO_ACTIVATION, false, e.getMessage(), e);
+            throw e;
+        }
     }
 
     public Activation upsertActivation(String xPagopaPnUid,
                                        CxTypeAuthFleet xPagopaPnCxType,
                                        String xPagopaPnCxId,
                                        ActivationPayload request) {
-        log.info("Upsert IO activation requested with status={}", request.getStatus());
-        if (ActivationStatus.ACTIVE.equals(request.getStatus())) {
-            acceptConsent(xPagopaPnUid, xPagopaPnCxId, xPagopaPnCxType, ConsentType.TOS);
-            acceptConsent(xPagopaPnUid, xPagopaPnCxId, xPagopaPnCxType, ConsentType.DATAPRIVACY);
+        log.logStartingProcess(UPSERT_IO_ACTIVATION);
+        try {
+            log.info("Upsert IO activation requested with status={}", request.getStatus());
+            if (ActivationStatus.ACTIVE.equals(request.getStatus())) {
+                acceptConsent(xPagopaPnUid, xPagopaPnCxId, xPagopaPnCxType, ConsentType.TOS);
+                acceptConsent(xPagopaPnUid, xPagopaPnCxId, xPagopaPnCxType, ConsentType.DATAPRIVACY);
+            }
+            Activation activation = upsertOnIoOrReadCurrent(request);
+            log.logEndingProcess(UPSERT_IO_ACTIVATION);
+            return activation;
+        } catch (RuntimeException e) {
+            log.logEndingProcess(UPSERT_IO_ACTIVATION, false, e.getMessage(), e);
+            throw e;
         }
-        return upsertOnIoOrReadCurrent(request);
     }
 
     private Activation upsertOnIoOrReadCurrent(ActivationPayload request) {
         try {
             return toActivation(ioLegalClient.upsertActivation(toIoActivationPayload(request)));
         } catch (PnHttpResponseException | RestClientException e) {
-            log.warn("Upsert IO activation failed, reading current activation from IO as fallback: {}", e.toString());
+            log.warn("Upsert IO activation failed, reading current activation from IO as fallback: {}", e.getMessage());
             return toActivation(ioLegalClient.getActivation(toIoFiscalCodePayload(request.getFiscalCode())));
         }
     }

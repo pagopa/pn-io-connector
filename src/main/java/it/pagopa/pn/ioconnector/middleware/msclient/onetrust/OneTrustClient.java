@@ -51,7 +51,6 @@ public class OneTrustClient {
                 || Objects.isNull(response.versions().get(0).majorVersion())) {
             String message = "Error mapping OneTrust privacy notice response: privacyNoticeId=" + privacyNoticeId
                     + " missing published version";
-            log.error(message);
             throw new PnInternalException(message, ERROR_CODE_IOCONNECTOR_PRIVACY_NOTICE_MAPPING_ERROR);
         }
         return new PrivacyNoticeOneTrustResult(response.versions().get(0).majorVersion());

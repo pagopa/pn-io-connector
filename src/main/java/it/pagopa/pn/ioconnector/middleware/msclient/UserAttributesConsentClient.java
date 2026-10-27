@@ -1,5 +1,6 @@
 package it.pagopa.pn.ioconnector.middleware.msclient;
 
+import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.commons.log.PnLogger;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.userattributes.v1.api.ConsentsApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.userattributes.v1.dto.ConsentAction;
@@ -8,6 +9,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.msclient.userattributes.v1.dto
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 
 @CustomLog
 @Component
@@ -21,6 +23,12 @@ public class UserAttributesConsentClient {
         ConsentAction consentAction = new ConsentAction()
                 .action(ConsentAction.ActionEnum.ACCEPT)
                 .channel(ConsentAction.ChannelEnum.IO);
-        consentsApi.consentAction(uid, cxId, cxType, consentType, String.valueOf(version), consentAction);
+        try {
+            consentsApi.consentAction(uid, cxId, cxType, consentType, String.valueOf(version), consentAction);
+        } catch (PnHttpResponseException | RestClientException e) {
+            log.logInvokationResultDownstreamFailed(PnLogger.EXTERNAL_SERVICES.PN_USER_ATTRIBUTES,
+                    "consentAction failed: consentType=" + consentType.getValue() + " version=" + version, e);
+            throw e;
+        }
     }
 }

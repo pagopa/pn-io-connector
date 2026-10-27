@@ -77,6 +77,19 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     }
 
     @Test
+    void toString_doesNotExposeSecretValues() {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"CF1,CF2","OneTrustToken":"ot-token"}""");
+
+        String text = config.ioLegalSecrets(secretsManagerClient, objectMapper).toString();
+
+        assertFalse(text.contains("key-legal"));
+        assertFalse(text.contains("key-optin"));
+        assertFalse(text.contains("CF1"));
+        assertFalse(text.contains("ot-token"));
+    }
+
+    @Test
     void secretWithoutOneTrustToken_failsStartup() {
         mockSecret("""
                 {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"*"}""");

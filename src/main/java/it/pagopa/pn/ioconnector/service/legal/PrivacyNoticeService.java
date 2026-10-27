@@ -2,6 +2,7 @@ package it.pagopa.pn.ioconnector.service.legal;
 
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.commons.log.PnLogger;
 import it.pagopa.pn.ioconnector.config.PrivacyNoticeDTO;
 import it.pagopa.pn.ioconnector.config.PrivacyNoticeMapping;
 import it.pagopa.pn.ioconnector.exceptions.PnPrivacyNoticeNotFoundException;
@@ -47,17 +48,17 @@ public class PrivacyNoticeService {
         Integer cachedVersion = privacyNoticeCache.get(privacyNotice.privacyNoticeId());
         if (cachedVersion != null) {
             log.warn("OneTrust call failed, using cached privacy notice version: consentsType={} portalType={} version={} cause={}",
-                    privacyNotice.consentsType(), privacyNotice.portalType(), cachedVersion, cause.toString());
+                    privacyNotice.consentsType(), privacyNotice.portalType(), cachedVersion, cause.getMessage());
             return cachedVersion;
         }
         if (privacyNotice.defaultVersion() == null) {
             String message = "OneTrust call failed, no cached version and no default version configured: consentsType="
                     + privacyNotice.consentsType() + " portalType=" + privacyNotice.portalType();
-            log.error(message, cause);
+            log.logInvokationResultDownstreamFailed(PnLogger.EXTERNAL_SERVICES.ONE_TRUST, message, cause);
             throw new PnInternalException(message, ERROR_CODE_IOCONNECTOR_PRIVACY_NOTICE_MAPPING_ERROR, cause);
         }
         log.warn("OneTrust call failed and no cached version, using default privacy notice version: consentsType={} portalType={} version={} cause={}",
-                privacyNotice.consentsType(), privacyNotice.portalType(), privacyNotice.defaultVersion(), cause.toString());
+                privacyNotice.consentsType(), privacyNotice.portalType(), privacyNotice.defaultVersion(), cause.getMessage());
         return privacyNotice.defaultVersion();
     }
 }

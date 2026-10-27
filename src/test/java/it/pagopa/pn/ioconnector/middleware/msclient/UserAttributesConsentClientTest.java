@@ -11,6 +11,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestClientException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -57,6 +58,15 @@ class UserAttributesConsentClientTest {
     @Test
     void acceptConsent_apiFails_propagatesError() {
         PnHttpResponseException error = new PnHttpResponseException("user-attributes error", 500);
+        doThrow(error).when(consentsApi).consentAction(any(), any(), any(), any(), any(), any());
+
+        assertThatThrownBy(() -> client.acceptConsent("uid-1", "cx-1", CxTypeAuthFleet.PF, ConsentType.TOS, 3))
+                .isSameAs(error);
+    }
+
+    @Test
+    void acceptConsent_restClientFails_propagatesError() {
+        RestClientException error = new RestClientException("connection refused");
         doThrow(error).when(consentsApi).consentAction(any(), any(), any(), any(), any(), any());
 
         assertThatThrownBy(() -> client.acceptConsent("uid-1", "cx-1", CxTypeAuthFleet.PF, ConsentType.TOS, 3))
