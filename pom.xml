@@ -30,6 +30,12 @@
             <version>2.21.0-VT</version>
         </dependency>
 
+        <dependency>
+            <groupId>it.pagopa.pn</groupId>
+            <artifactId>pn-model</artifactId>
+            <version>2.13.0-SPRINGBOOT3</version>
+        </dependency>
+
         <!-- Spring Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
