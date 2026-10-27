@@ -5,13 +5,11 @@ import it.pagopa.pn.api.dto.events.EventType;
 import it.pagopa.pn.api.dto.events.MomProducer;
 import it.pagopa.pn.api.dto.events.PnExtRegistryIOSentMessageEvent;
 import it.pagopa.pn.api.dto.events.StandardEventHeader;
-import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 
-@CustomLog
 @Service
 @RequiredArgsConstructor
 public class SendIOSentMessageService {
@@ -21,11 +19,8 @@ public class SendIOSentMessageService {
 
     private final MomProducer<PnExtRegistryIOSentMessageEvent> ioSentMessageProducer;
 
-
     public void sendIOSentMessageNotification(String iun, int recIndex, String internalId, Instant sentDate) {
-        log.info("Send IONotificationMessage event for iun={} recIndex={} internalId={} sentDate={}", iun, recIndex, internalId, sentDate);
         ioSentMessageProducer.push(buildIOSentMessageEvent(iun, recIndex, internalId, sentDate));
-        log.info("Sent IONotificationMessage event for iun={} recIndex={}", iun, recIndex);
     }
 
     private PnExtRegistryIOSentMessageEvent buildIOSentMessageEvent(String iun, int recIndex, String internalId, Instant sentDate) {

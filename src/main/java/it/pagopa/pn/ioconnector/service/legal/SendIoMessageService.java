@@ -27,8 +27,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
+import static it.pagopa.pn.ioconnector.utils.LogUtils.CHECK_ENABLE_IO_ACTIVATION_MESSAGE;
+import static it.pagopa.pn.ioconnector.utils.LogUtils.CHECK_ENABLE_IO_MESSAGE;
+import static it.pagopa.pn.ioconnector.utils.LogUtils.CHECK_IO_USER_STATUS;
 import static it.pagopa.pn.ioconnector.utils.LogUtils.MANAGE_OPT_IN;
-import static it.pagopa.pn.ioconnector.utils.LogUtils.SEND_LEGAL_IO_MESSAGE;
 
 @CustomLog
 @Service
@@ -78,32 +80,32 @@ public class SendIoMessageService {
         MDC.put(MDCUtils.MDC_PN_CTX_RECIPIENT_INDEX, String.valueOf(request.getRecipientIndex()));
         MDC.put(MDCUtils.MDC_PN_CTX_REQUEST_ID, requestId);
         MDC.put(MDCUtils.MDC_PN_CTX_TOPIC, MDC_TOPIC_SEND_IO_MESSAGE);
-        log.logStartingProcess(SEND_LEGAL_IO_MESSAGE);
         try {
-            log.info("[enter] sendIoMessage taxId={} iun={}", LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun());
-
+            log.logChecking(CHECK_IO_USER_STATUS);
             UserStatusInternal userStatus = getUserStatusInternal(request.getRecipientTaxID());
+            if (userStatus.status() == UserStatusResponse.StatusEnum.ERROR) {
+                log.logCheckingOutcome(CHECK_IO_USER_STATUS, false, "ERROR, message not sent");
+            } else {
+                log.logCheckingOutcome(CHECK_IO_USER_STATUS, true);
+            }
+
             SendMessageResponse response = switch (userStatus.status()) {
                 case APPIO_NOT_ACTIVE -> {
-                    log.info("IO is not available for user, not sending message taxId={} iun={}",
-                            LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun());
+                    log.info("IO user status=APPIO_NOT_ACTIVE, message not sent");
                     yield result(SendMessageResponse.ResultEnum.NOT_SENT_APPIO_UNAVAILABLE);
                 }
-                case PN_ACTIVE -> sendCourtesyMessage(request, isPreferredLanguageIT(userStatus.preferredLanguages()));
-                case PN_NOT_ACTIVE -> manageOptIn(request);
-                case ERROR -> {
-                    log.info("Error in get user status, not sending message taxId={} iun={}",
-                            LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun());
-                    yield result(SendMessageResponse.ResultEnum.ERROR_USER_STATUS);
+                case PN_ACTIVE -> {
+                    log.info("IO user status=PN_ACTIVE, courtesy flow");
+                    yield sendCourtesyMessage(request, isPreferredLanguageIT(userStatus.preferredLanguages()));
                 }
+                case PN_NOT_ACTIVE -> {
+                    log.info("IO user status=PN_NOT_ACTIVE, opt-in flow");
+                    yield manageOptIn(request);
+                }
+                case ERROR -> result(SendMessageResponse.ResultEnum.ERROR_USER_STATUS);
             };
             response.setRequestId(requestId);
-
-            log.logEndingProcess(SEND_LEGAL_IO_MESSAGE);
             return response;
-        } catch (Exception e) {
-            log.logEndingProcess(SEND_LEGAL_IO_MESSAGE, false, e.getMessage(), e);
-            throw e;
         } finally {
             MDC.remove(MDCUtils.MDC_PN_IUN_KEY);
             MDC.remove(MDCUtils.MDC_CX_ID_KEY);
@@ -114,19 +116,17 @@ public class SendIoMessageService {
     }
 
     private SendMessageResponse sendCourtesyMessage(SendMessageRequest request, boolean localeIsIT) {
-        log.info("Submit message taxId={} iun={} internalId={} recIndex={} carbonCopy={}",
-                LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), request.getRecipientInternalID(),
-                request.getRecipientIndex(), request.getCarbonCopyToDeliveryPush());
+        log.info("Sending courtesy message carbonCopyToDeliveryPush={}", request.getCarbonCopyToDeliveryPush());
+        log.logChecking(CHECK_ENABLE_IO_MESSAGE);
         if (!config.isEnableIoMessage()) {
-            log.warn("Send IO message is disabled!!!");
+            log.logCheckingOutcome(CHECK_ENABLE_IO_MESSAGE, false, "courtesy message disabled by configuration");
             return result(SendMessageResponse.ResultEnum.NOT_SENT_COURTESY_DISABLED_BY_CONF);
         }
+        log.logCheckingOutcome(CHECK_ENABLE_IO_MESSAGE, true);
 
         NewMessage message = ioLegalMessageBuilder.buildCourtesyMessage(request, localeIsIT);
-        log.info("Proceeding with send message iun={}", request.getIun());
         try {
             String id = ioLegalClient.sendCourtesyMessage(message);
-            log.info("Sent message iun={}", request.getIun());
 
             if (Boolean.TRUE.equals(request.getCarbonCopyToDeliveryPush())) {
                 sendIOSentMessageService.sendIOSentMessageNotification(request.getIun(), request.getRecipientIndex(),
@@ -137,7 +137,7 @@ public class SendIoMessageService {
 
             return result(SendMessageResponse.ResultEnum.SENT_COURTESY).id(id);
         } catch (Exception e) {
-            log.error("Error in submitMessageforUserWithFiscalCodeInBody iun={}", request.getIun());
+            log.error("Error sending courtesy message, result=ERROR_COURTESY: {}", e.getMessage(), e);
             return result(SendMessageResponse.ResultEnum.ERROR_COURTESY);
         }
     }
@@ -175,20 +175,19 @@ public class SendIoMessageService {
     }
 
     private SendMessageResponse sendOptInMessage(SendMessageRequest request) {
-        log.info("Submit activation message taxId={}", LogUtils.maskTaxId(request.getRecipientTaxID()));
+        log.logChecking(CHECK_ENABLE_IO_ACTIVATION_MESSAGE);
         if (!config.isEnableIoActivationMessage()) {
-            log.info("Send IO message is disabled");
+            log.logCheckingOutcome(CHECK_ENABLE_IO_ACTIVATION_MESSAGE, false, "opt-in message disabled by configuration");
             return result(SendMessageResponse.ResultEnum.NOT_SENT_OPTIN_DISABLED_BY_CONF);
         }
+        log.logCheckingOutcome(CHECK_ENABLE_IO_ACTIVATION_MESSAGE, true);
 
-        log.info("Proceeding with send activation message taxId={}", LogUtils.maskTaxId(request.getRecipientTaxID()));
         NewMessage message = ioLegalMessageBuilder.buildOptInMessage(request);
         try {
             String id = ioLegalClient.sendOptInMessage(message);
-            log.info("Sent activation message");
             return result(SendMessageResponse.ResultEnum.SENT_OPTIN).id(id);
         } catch (Exception e) {
-            log.error("Error in submitActivationMessageforUserWithFiscalCodeInBody iun={}", request.getIun());
+            log.error("Error sending opt-in message, result=ERROR_OPTIN: {}", e.getMessage(), e);
             return result(SendMessageResponse.ResultEnum.ERROR_OPTIN);
         }
     }

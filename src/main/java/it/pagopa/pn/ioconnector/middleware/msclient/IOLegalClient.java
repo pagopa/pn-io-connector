@@ -86,6 +86,7 @@ public class IOLegalClient extends BaseRestClient {
             meterRegistry.get(SpringAnalyzerActivation.IO_SENT_SUCCESSFULLY).counter().increment();
             return id;
         } catch (RuntimeException ex) {
+            log.logInvokationResultDownstreamFailed(PnLogger.EXTERNAL_SERVICES.IO, ex.getMessage(), ex);
             meterRegistry.get(SpringAnalyzerActivation.IO_SENT_FAILURE).counter().increment();
             throw ex;
         }
