@@ -6,6 +6,7 @@ import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.FiscalCodePayload;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.SendMessageRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.SendMessageResponse;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.UserStatusRequest;
@@ -35,6 +36,7 @@ import static it.pagopa.pn.ioconnector.utils.LogUtils.SEND_LEGAL_IO_MESSAGE;
 public class SendIoMessageService {
 
     private static final String IO_LOCALE_IT_IT = "it_IT";
+    static final String MDC_TOPIC_SEND_IO_MESSAGE = "sendIOMessage";
 
     private final PnIoConnectorConfig config;
     private final IOConnectorOptInDao ioConnectorOptInDAO;
@@ -75,6 +77,7 @@ public class SendIoMessageService {
         MDC.put(MDCUtils.MDC_CX_ID_KEY, request.getRecipientInternalID());
         MDC.put(MDCUtils.MDC_PN_CTX_RECIPIENT_INDEX, String.valueOf(request.getRecipientIndex()));
         MDC.put(MDCUtils.MDC_PN_CTX_REQUEST_ID, requestId);
+        MDC.put(MDCUtils.MDC_PN_CTX_TOPIC, MDC_TOPIC_SEND_IO_MESSAGE);
         log.logStartingProcess(SEND_LEGAL_IO_MESSAGE);
         try {
             log.info("[enter] sendIoMessage taxId={} iun={}", LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun());
@@ -106,6 +109,7 @@ public class SendIoMessageService {
             MDC.remove(MDCUtils.MDC_CX_ID_KEY);
             MDC.remove(MDCUtils.MDC_PN_CTX_RECIPIENT_INDEX);
             MDC.remove(MDCUtils.MDC_PN_CTX_REQUEST_ID);
+            MDC.remove(MDCUtils.MDC_PN_CTX_TOPIC);
         }
     }
 
@@ -118,9 +122,10 @@ public class SendIoMessageService {
             return result(SendMessageResponse.ResultEnum.NOT_SENT_COURTESY_DISABLED_BY_CONF);
         }
 
+        NewMessage message = ioLegalMessageBuilder.buildCourtesyMessage(request, localeIsIT);
+        log.info("Proceeding with send message iun={}", request.getIun());
         try {
-            log.info("Proceeding with send message iun={}", request.getIun());
-            String id = ioLegalClient.sendCourtesyMessage(ioLegalMessageBuilder.buildCourtesyMessage(request, localeIsIT));
+            String id = ioLegalClient.sendCourtesyMessage(message);
             log.info("Sent message iun={}", request.getIun());
 
             if (Boolean.TRUE.equals(request.getCarbonCopyToDeliveryPush())) {
@@ -176,9 +181,10 @@ public class SendIoMessageService {
             return result(SendMessageResponse.ResultEnum.NOT_SENT_OPTIN_DISABLED_BY_CONF);
         }
 
+        log.info("Proceeding with send activation message taxId={}", LogUtils.maskTaxId(request.getRecipientTaxID()));
+        NewMessage message = ioLegalMessageBuilder.buildOptInMessage(request);
         try {
-            log.info("Proceeding with send activation message taxId={}", LogUtils.maskTaxId(request.getRecipientTaxID()));
-            String id = ioLegalClient.sendOptInMessage(ioLegalMessageBuilder.buildOptInMessage(request));
+            String id = ioLegalClient.sendOptInMessage(message);
             log.info("Sent activation message");
             return result(SendMessageResponse.ResultEnum.SENT_OPTIN).id(id);
         } catch (Exception e) {

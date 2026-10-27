@@ -28,7 +28,9 @@ import org.slf4j.MDC;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -373,6 +375,49 @@ class SendIoMessageServiceTest {
 
         assertThat(result.getRequestId()).isEqualTo("req-123");
         assertThat(MDC.get(MDCUtils.MDC_PN_CTX_REQUEST_ID)).isNull();
+    }
+
+    @Test
+    void sendMessage_WhenCourtesyMessageBuildFails_ThenIsPropagated() {
+        givenProfile(true, null);
+        when(ioLegalMessageBuilder.buildCourtesyMessage(any(), anyBoolean())).thenThrow(new IllegalStateException("build error"));
+        SendMessageRequest request = buildRequest().carbonCopyToDeliveryPush(true);
+
+        assertThrows(IllegalStateException.class, () -> sendIoMessageService.sendMessage(request));
+        verify(ioLegalClient, never()).sendCourtesyMessage(any());
+        verifyNoInteractions(sendIOSentMessageService);
+    }
+
+    @Test
+    void sendMessage_WhenOptInMessageBuildFails_ThenIsPropagatedWithoutSave() {
+        givenProfile(false, null);
+        when(ioConnectorOptInDAO.get(anyString())).thenReturn(Optional.empty());
+        when(ioLegalMessageBuilder.buildOptInMessage(any())).thenThrow(new IllegalStateException("build error"));
+        SendMessageRequest request = buildRequest();
+
+        assertThrows(IllegalStateException.class, () -> sendIoMessageService.sendMessage(request));
+        verify(ioLegalClient, never()).sendOptInMessage(any());
+        verify(ioConnectorOptInDAO, never()).save(any());
+    }
+
+    @Test
+    void sendMessage_SetsMdcDuringProcessingAndClearsItAfter() {
+        Map<String, String> mdcDuringCall = new HashMap<>();
+        when(ioLegalClient.getProfile(any(FiscalCodePayload.class))).thenAnswer(invocation -> {
+            mdcDuringCall.putAll(MDC.getCopyOfContextMap());
+            throw new PnHttpResponseException("Not Found", 404);
+        });
+
+        sendIoMessageService.sendMessage(buildRequest().requestId("req-123"));
+
+        assertThat(mdcDuringCall)
+                .containsEntry(MDCUtils.MDC_PN_IUN_KEY, IUN)
+                .containsEntry(MDCUtils.MDC_CX_ID_KEY, INTERNAL_ID)
+                .containsEntry(MDCUtils.MDC_PN_CTX_RECIPIENT_INDEX, String.valueOf(REC_INDEX))
+                .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "req-123")
+                .containsEntry(MDCUtils.MDC_PN_CTX_TOPIC, "sendIOMessage");
+        assertThat(MDC.get(MDCUtils.MDC_PN_CTX_TOPIC)).isNull();
+        assertThat(MDC.get(MDCUtils.MDC_PN_IUN_KEY)).isNull();
     }
 
     // --- getUserStatus ---
