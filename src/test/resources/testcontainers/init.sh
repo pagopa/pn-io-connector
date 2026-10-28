@@ -21,6 +21,9 @@ SQS_QUEUES=(
   "pn-io-connector-send-queue"
   "pn-io-connector-polling-queue"
 )
+SQS_FIFO_QUEUES=(
+  "local-delivery-push-inputs.fifo"
+)
 
 ## LOGGING FUNCTIONS ##
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
@@ -214,12 +217,33 @@ create_sqs_queue() {
   fi
 }
 
+create_sqs_fifo_queue() {
+  local queue_name=$1
+
+  log "Creating SQS FIFO queue: $queue_name"
+  if ! aws sqs create-queue \
+    --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" \
+    --endpoint-url "$LOCALSTACK_ENDPOINT" \
+    --queue-name "$queue_name" \
+    --attributes DelaySeconds=2,FifoQueue=true,ContentBasedDeduplication=true ; then
+    log "Failed to create FIFO queue: $queue_name"
+    return 1
+  else
+    log "FIFO queue created: $queue_name"
+  fi
+}
+
 initialize_sqs() {
   log "Initializing SQS queues"
   local return_code=0
 
   for queue_name in "${SQS_QUEUES[@]}"; do
     create_sqs_queue "$queue_name" || { log "Failed to initialize queue: $queue_name"; return_code=1; }
+  done
+
+  for queue_name in "${SQS_FIFO_QUEUES[@]}"; do
+    create_sqs_fifo_queue "$queue_name" || { log "Failed to initialize FIFO queue: $queue_name"; return_code=1; }
   done
 
   return $return_code

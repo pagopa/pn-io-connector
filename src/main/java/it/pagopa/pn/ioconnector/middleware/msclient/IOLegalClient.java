@@ -1,5 +1,6 @@
 package it.pagopa.pn.ioconnector.middleware.msclient;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.commons.log.PnLogger;
 import it.pagopa.pn.ioconnector.config.IoWhitelistChecker;
@@ -11,6 +12,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.FiscalCodeP
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnector.middleware.msclient.common.BaseRestClient;
+import it.pagopa.pn.ioconnector.springbootcfg.SpringAnalyzerActivation;
 import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -26,13 +28,16 @@ public class IOLegalClient extends BaseRestClient {
     private final DefaultApi ioLegalApi;
     private final DefaultApi ioOptInApi;
     private final IoWhitelistChecker whitelistChecker;
+    private final MeterRegistry meterRegistry;
 
     public IOLegalClient(@Qualifier("ioLegalApi") DefaultApi ioLegalApi,
                          @Qualifier("ioOptInApi") DefaultApi ioOptInApi,
-                         IoWhitelistChecker whitelistChecker) {
+                         IoWhitelistChecker whitelistChecker,
+                         MeterRegistry meterRegistry) {
         this.ioLegalApi = ioLegalApi;
         this.ioOptInApi = ioOptInApi;
         this.whitelistChecker = whitelistChecker;
+        this.meterRegistry = meterRegistry;
     }
 
     public LimitedProfile getProfile(FiscalCodePayload payload) {
@@ -76,7 +81,15 @@ public class IOLegalClient extends BaseRestClient {
             return UUID.randomUUID().toString();
         }
         log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, operation);
-        return invoke(operation, () -> api.submitMessageforUserWithFiscalCodeInBody(message).getId());
+        try {
+            String id = invoke(operation, () -> api.submitMessageforUserWithFiscalCodeInBody(message).getId());
+            meterRegistry.get(SpringAnalyzerActivation.IO_SENT_SUCCESSFULLY).counter().increment();
+            return id;
+        } catch (RuntimeException ex) {
+            log.logInvokationResultDownstreamFailed(PnLogger.EXTERNAL_SERVICES.IO, ex.getMessage(), ex);
+            meterRegistry.get(SpringAnalyzerActivation.IO_SENT_FAILURE).counter().increment();
+            throw ex;
+        }
     }
 
     private Activation simulatedInactiveActivation(String fiscalCode) {

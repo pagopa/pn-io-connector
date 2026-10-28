@@ -7,6 +7,7 @@ import it.pagopa.pn.commons.conf.SharedAutoConfiguration;
 import jakarta.validation.constraints.NotBlank;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
+import it.pagopa.pn.ioconnector.middleware.queue.producer.SqsIOSentMessageProducer;
 import lombok.CustomLog;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -18,6 +19,7 @@ import org.springframework.validation.annotation.Validated;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
+import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.ssm.SsmClient;
 import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
 import software.amazon.awssdk.services.ssm.model.GetParameterResponse;
@@ -49,6 +51,13 @@ public class PnIoConnectorConfig {
     private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
     private int ioOptinMinDays;
+    private boolean enableIoMessage;
+    private boolean enableIoActivationMessage;
+    private String ioRemoteContentCfgId;
+    private String piattaformanotificheurlCittadini;
+    private String piattaformanotificheurlTos;
+    private String piattaformanotificheurlPrivacy;
+    private String sqsDeliveryPushInputQueueName;
 
     /**
      * Comunicazioni Bonarie
@@ -110,6 +119,11 @@ public class PnIoConnectorConfig {
             log.info("IO whitelist DISABLED - wildcard '*' configured");
         }
         return checker;
+    }
+
+    @Bean
+    public SqsIOSentMessageProducer sqsIOSentMessageProducer(SqsClient sqsClient, ObjectMapper objectMapper) {
+        return new SqsIOSentMessageProducer(sqsClient, sqsDeliveryPushInputQueueName, objectMapper);
     }
 
     @Bean
