@@ -1,6 +1,7 @@
 package it.pagopa.pn.ioconnector.rest.legal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.pagopa.pn.commons.exceptions.PnExceptionsCodes;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import it.pagopa.pn.ioconnector.exceptions.PnPrivacyNoticeNotFoundException;
@@ -12,6 +13,8 @@ import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.FiscalCodePayloa
 import it.pagopa.pn.ioconnector.service.legal.IoActivationService;
 import it.pagopa.pn.ioconnector.springbootcfg.PnErrorWebExceptionHandlerActivation;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -22,6 +25,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -45,10 +49,14 @@ class IoActivationControllerTest {
     private IoActivationService ioActivationService;
 
     private MockHttpServletRequestBuilder putRequest() throws Exception {
+        return putRequest("PF");
+    }
+
+    private MockHttpServletRequestBuilder putRequest(String cxType) throws Exception {
         ActivationPayload payload = new ActivationPayload().fiscalCode(FISCAL_CODE).status(ActivationStatus.ACTIVE);
         return put(PATH)
                 .header("x-pagopa-pn-uid", "uid-1")
-                .header("x-pagopa-pn-cx-type", "PF")
+                .header("x-pagopa-pn-cx-type", cxType)
                 .header("x-pagopa-pn-cx-id", "cx-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payload));
@@ -70,6 +78,28 @@ class IoActivationControllerTest {
                 .andExpect(jsonPath("$.fiscal_code").value(FISCAL_CODE))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.version").value(7));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PF", "PG"})
+    void upsertIoActivation_allowedCxType_returns200(String cxType) throws Exception {
+        when(ioActivationService.upsertActivation(eq("uid-1"), eq(CxTypeAuthFleet.fromValue(cxType)), eq("cx-1"), any(ActivationPayload.class)))
+                .thenReturn(new Activation().fiscalCode(FISCAL_CODE).status(ActivationStatus.ACTIVE).version(7));
+
+        mockMvc.perform(putRequest(cxType))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PA", "RADD", "BO", "XX"})
+    void upsertIoActivation_cxTypeNotAllowed_returns400(String cxType) throws Exception {
+        mockMvc.perform(putRequest(cxType))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].code").value(PnExceptionsCodes.ERROR_CODE_PN_GENERIC_INVALIDPARAMETER))
+                .andExpect(jsonPath("$.errors[0].detail").value("Unexpected value '" + cxType + "'"));
+
+        verifyNoInteractions(ioActivationService);
     }
 
     @Test

@@ -183,7 +183,7 @@ paths:
       operationId: upsertIoActivation
       parameters:
         - $ref: 'remote-refs.yaml#/components/parameters/uidAuthFleet'
-        - $ref: 'remote-refs.yaml#/components/parameters/cxTypeAuthFleet'
+        - $ref: '#/components/parameters/xPagopaPnCxType'
         - $ref: 'remote-refs.yaml#/components/parameters/cxIdAuthFleet'
       requestBody:
         required: true
@@ -289,8 +289,20 @@ components:
       description: Identificativo del client che invoca il microservizio (cxId).
       schema:
         type: string
+    xPagopaPnCxType:
+      name: x-pagopa-pn-cx-type
+      in: header
+      required: true
+      description: Customer/Receiver Type
+      schema:
+        $ref: '#/components/schemas/CxTypeAuthFleet'
 
   schemas:
+
+    CxTypeAuthFleet:
+      type: string
+      # sottoinsieme dei valori auth-fleet effettivamente attesi sul flusso legale
+      enum: [PF, PG]
 
     MessageRequest:
       type: object
