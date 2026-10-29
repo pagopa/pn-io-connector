@@ -2,6 +2,7 @@ package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
+import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.localstack.LocalStackTestConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
@@ -95,6 +96,33 @@ class PollingWorkerIntegrationTest {
         assertThat(requeued.getLastKnownStatus()).isEqualTo(EventType.SENT_TO_IO);
         assertThat(requeued.getAttemptCount()).isEqualTo(1);
 
+        verify(eventBridgeProducer, never()).publish(any());
+    }
+
+    @Test
+    void io5xx_reEnqueuesMessageToPollingQueue() throws Exception {
+        OutcomePollingRequest request = buildRequest("INT-POLL-009", EventType.SENT_TO_IO, false);
+        String receiptHandle = enqueueAndReceive(request);
+        Message<OutcomePollingRequest> message = buildMessage(request, receiptHandle);
+
+        when(ioService.getServiceUseKey(anyString())).thenReturn("test-api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any()))
+                .thenThrow(new PnHttpResponseException("Service Unavailable", 503));
+
+        pollingWorker.process(message, acknowledgement);
+
+        ReceiveMessageResponse queued = sqsClient.receiveMessage(r -> r
+                .queueUrl(queueUrl)
+                .maxNumberOfMessages(1)
+                .waitTimeSeconds(5));
+        assertThat(queued.messages()).isNotEmpty();
+        OutcomePollingRequest requeued = objectMapper.readValue(
+                queued.messages().get(0).body(), OutcomePollingRequest.class);
+        assertThat(requeued.getRequestId()).isEqualTo("INT-POLL-009");
+        assertThat(requeued.getLastKnownStatus()).isEqualTo(EventType.SENT_TO_IO);
+        assertThat(requeued.getAttemptCount()).isEqualTo(1);
+
+        verify(acknowledgement).acknowledge();
         verify(eventBridgeProducer, never()).publish(any());
     }
 
