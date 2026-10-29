@@ -49,6 +49,7 @@ public class PnIoConnectorConfig {
     private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
     private int ioOptinMinDays;
+    private String timelineServiceBaseUrl;
 
     /**
      * Comunicazioni Bonarie

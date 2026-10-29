@@ -4,6 +4,7 @@ import it.pagopa.pn.ioconnector.config.IoLegalSecrets;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.datavault.v1.api.RecipientsApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.DefaultApi;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.timelineservice.v1.api.TimelineControllerApi;
 import it.pagopa.pn.ioconnector.middleware.msclient.common.BaseRestClient;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -23,6 +24,19 @@ public class MsClientConfig {
             );
             apiClient.setBasePath(config.getDataVaultBaseUrl());
             return new RecipientsApi(apiClient);
+        }
+    }
+
+    @Configuration
+    static class TimelineServiceApis extends BaseRestClient {
+
+        @Bean
+        TimelineControllerApi timelineControllerApi(PnIoConnectorConfig config) {
+            var apiClient = new it.pagopa.pn.ioconnector.generated.openapi.msclient.timelineservice.v1.ApiClient(
+                    initRestClient().build()
+            );
+            apiClient.setBasePath(config.getTimelineServiceBaseUrl());
+            return new TimelineControllerApi(apiClient);
         }
     }
 

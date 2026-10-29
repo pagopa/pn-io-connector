@@ -11,6 +11,8 @@ tags:
     description: Attivazione del servizio SEND su App IO e accettazione dei consensi
   - name: SendIoMessage
     description: Comunicazioni a valore legale verso App IO
+  - name: FromIoMessage
+    description: Endpoint invocati da App IO per il disclaimer di pre-apertura notifica
 
 paths:
   /io-connector/message:
@@ -280,6 +282,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+
+  /io-connector/io/v1/notification-disclaimer/{iun}:
+    get:
+      tags: [FromIoMessage]
+      summary: Disclaimer di pre-apertura notifica
+      operationId: notificationDisclaimer
+      parameters:
+        - name: iun
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificativo Univoco Notifica su SEND.
+        - $ref: 'remote-refs.yaml#/components/parameters/cxIdAuthFleet'
+      responses:
+        '200':
+          description: Contenuto del bottom sheet di pre-apertura notifica.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreconditionContent'
+        '400':
+          description: Richiesta malformata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Notifica non trovata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          description: Errore interno del server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
 components:
   parameters:
     xPagopaIoConCxId:
@@ -291,6 +333,21 @@ components:
         type: string
 
   schemas:
+
+    PreconditionContent:
+      type: object
+      description: Contenuto del bottom sheet di pre-apertura notifica.
+      required:
+        - title
+        - markdown
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          description: Titolo del bottom sheet.
+        markdown:
+          type: string
+          description: Corpo del bottom sheet in formato Markdown.
 
     MessageRequest:
       type: object
