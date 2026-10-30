@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
+import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
@@ -14,6 +15,8 @@ import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -27,6 +30,7 @@ import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlResponse;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
+import software.amazon.awssdk.services.sqs.model.SqsException;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -462,12 +466,12 @@ class PollingWorkerTest {
     }
 
     @Test
-    void ioThrows_doesNotAck() {
+    void ioThrowsUnexpected_doesNotAck() {
         OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
         Message<OutcomePollingRequest> message = buildMessage(request, 0);
 
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
-        when(ioService.getReachedEventTypes(any(), any(), any())).thenThrow(new RuntimeException("IO 500"));
+        when(ioService.getReachedEventTypes(any(), any(), any())).thenThrow(new RuntimeException("unexpected"));
 
         assertThatThrownBy(() -> pollingWorker.process(message, acknowledgement))
                 .isInstanceOf(RuntimeException.class);
@@ -475,6 +479,71 @@ class PollingWorkerTest {
         verify(dao, never()).update(any());
         verify(eventBridgeProducer, never()).publish(any());
         verify(sqsClient, never()).sendMessage(any(SendMessageRequest.class));
+        verify(acknowledgement, never()).acknowledge();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {429, 500, 502, 503, 504})
+    void ioRetryableError_acksAndReEnqueues(int statusCode) {
+        OutcomePollingRequest request = buildRequest(EventType.DELIVERED_TO_USER, 2, true);
+        // elapsedSeconds=3700 > pollingIntervalSeconds=3600: bypassa il visibility check (attemptCount>0)
+        Message<OutcomePollingRequest> message = buildMessage(request, 3700);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any()))
+                .thenThrow(new PnHttpResponseException("IO error", statusCode));
+        mockQueueUrl();
+        when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
+
+        pollingWorker.process(message, acknowledgement);
+
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(sqsClient).sendMessage(sqsCaptor.capture());
+        OutcomePollingRequest requeued = readRequeued(sqsCaptor.getValue());
+        assertThat(requeued.getAttemptCount()).isEqualTo(3);
+        assertThat(requeued.getLastKnownStatus()).isEqualTo(EventType.DELIVERED_TO_USER);
+        assertThat(requeued.getNoticeCode()).isEqualTo("302000000000000000");
+        verify(acknowledgement).acknowledge();
+
+        verify(dao, never()).findByIdConsistentRead(any());
+        verify(dao, never()).update(any());
+        verify(eventBridgeProducer, never()).publish(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 404})
+    void ioNonRetryableError_rethrowsWithoutAck(int statusCode) {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        Message<OutcomePollingRequest> message = buildMessage(request, 0);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any()))
+                .thenThrow(new PnHttpResponseException("IO error", statusCode));
+
+        assertThatThrownBy(() -> pollingWorker.process(message, acknowledgement))
+                .isInstanceOf(PnHttpResponseException.class);
+
+        verify(dao, never()).update(any());
+        verify(eventBridgeProducer, never()).publish(any());
+        verify(sqsClient, never()).sendMessage(any(SendMessageRequest.class));
+        verify(acknowledgement, never()).acknowledge();
+    }
+
+    @Test
+    void ioRetryableError_reEnqueueFails_doesNotAck() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        Message<OutcomePollingRequest> message = buildMessage(request, 0);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any()))
+                .thenThrow(new PnHttpResponseException("Service Unavailable", 503));
+        mockQueueUrl();
+        when(sqsClient.sendMessage(any(SendMessageRequest.class)))
+                .thenThrow(SqsException.builder().message("SQS down").build());
+
+        assertThatThrownBy(() -> pollingWorker.process(message, acknowledgement))
+                .isInstanceOf(SqsException.class);
+
         verify(acknowledgement, never()).acknowledge();
     }
 
