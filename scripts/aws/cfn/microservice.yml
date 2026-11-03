@@ -334,7 +334,7 @@ Resources:
         ContainerEnvEntry16: !Sub 'PN_IO_CONNECTOR_OPTIN_DYNAMODB_TABLE_NAME=${PnIoConnectorOptInTableName}'
         ContainerEnvEntry17: !Sub 'PN_IO_CONNECTOR_SERVICE_CONFIGURATIONS_PARAMETER_NAME=${PnIoConnectorServiceConfigurationsParameterName}'
         ContainerEnvEntry18: !Sub 'PN_TIMELINE_SERVICE_BASE_URL=${PnTimelineServiceBaseUrl}'
-        MappedPaths: '/io-connector/message*,/io-connector/profile*,/io-connector/activations*,/io-connector/user-status*,/io-connector/sendmessage*,/io-connector/io*'
+        MappedPaths: '/io-connector/*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
         VpcId: !Ref VpcId

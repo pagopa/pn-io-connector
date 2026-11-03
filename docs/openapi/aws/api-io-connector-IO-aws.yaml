@@ -2,7 +2,7 @@ openapi: 3.0.1
 info:
   title: >-
     ${stageVariables.ProjectName}-${stageVariables.MicroServiceUniqueName}-${stageVariables.IntendedUsage}
-  version: cC2Vs5aZJ81gBMwY91eJmLA6g0u1YHkvi2J3USwApbo=
+  version: t3q3heB8E5+awp82EBPolr6DwzDy+ljbL8TpkIp31C4=
 servers:
   - url: https://${stageVariables.DnsName}/{basePath}
     variables:
@@ -229,7 +229,7 @@ components:
     cxTaxId:
       name: x-pagopa-cx-taxid
       in: header
-      required: true
+      required: false
       schema:
         type: string
         minLength: 16
@@ -289,7 +289,7 @@ components:
     lollipopUserId:
       name: x-pagopa-lollipop-user-id
       in: header
-      required: false
+      required: true
       schema:
         type: string
         minLength: 16
@@ -385,7 +385,7 @@ components:
         authorizerResultTtlInSeconds: 300
         identitySource: >-
           method.request.header.x-pagopa-lollipop-auth-jwt,
-          method.request.header.x-pagopa-cx-taxid
+          method.request.header.x-pagopa-lollipop-user-id
         type: request
 tags:
   - name: IoConnector

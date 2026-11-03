@@ -75,7 +75,7 @@ paths:
         '200':
           description: Contenuto binario dell'allegato (modalità bytestream).
           content:
-            application/pdf: {}
+            application/octet-stream: {}
         '302':
           description: Redirect alla presignedUri di SafeStorage.
           headers:
@@ -135,7 +135,7 @@ components:
     cxTaxId:
       name: x-pagopa-cx-taxid
       in: header
-      required: true
+      required: false
       schema:
         type: string
         minLength: 16
@@ -185,7 +185,7 @@ components:
     lollipopUserId:
       name: x-pagopa-lollipop-user-id
       in: header
-      required: false
+      required: true
       schema:
         type: string
         minLength: 16
