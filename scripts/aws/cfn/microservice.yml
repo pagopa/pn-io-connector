@@ -225,11 +225,6 @@ Parameters:
     Default: 'http://alb.confidential.pn.internal:8080'
     Description: 'Base URL of pn-data-vault internal service'
 
-  PnTimelineServiceBaseUrl:
-    Type: String
-    Default: 'http://alb.internal.pn.internal:8080'
-    Description: 'Base URL of pn-timeline-service internal service'
-
   PnIoConnectorIoBaseUrl:
     Type: String
     Default: 'https://api.io.pagopa.it/api/v1'
@@ -333,7 +328,7 @@ Resources:
         ContainerEnvEntry15: !Sub 'PN_IO_CONNECTOR_IO_LEGAL_BASE_URL=${PnIoConnectorIoLegalBaseUrl}'
         ContainerEnvEntry16: !Sub 'PN_IO_CONNECTOR_OPTIN_DYNAMODB_TABLE_NAME=${PnIoConnectorOptInTableName}'
         ContainerEnvEntry17: !Sub 'PN_IO_CONNECTOR_SERVICE_CONFIGURATIONS_PARAMETER_NAME=${PnIoConnectorServiceConfigurationsParameterName}'
-        ContainerEnvEntry18: !Sub 'PN_TIMELINE_SERVICE_BASE_URL=${PnTimelineServiceBaseUrl}'
+        ContainerEnvEntry18: !Sub 'PN_TIMELINE_SERVICE_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
         MappedPaths: '/io-connector/*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
