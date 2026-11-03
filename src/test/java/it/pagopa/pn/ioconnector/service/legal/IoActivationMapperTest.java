@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class IoActivationMapperTest {
 
@@ -48,10 +49,18 @@ class IoActivationMapperTest {
     }
 
     @ParameterizedTest
-    @EnumSource(it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.CxTypeAuthFleet.class)
+    @EnumSource(value = it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.CxTypeAuthFleet.class,
+            names = {"PA", "PF", "PG", "RADD"})
     void toUserAttributesCxType_mapsByValue(it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.CxTypeAuthFleet cxType) {
         var result = IoActivationMapper.toUserAttributesCxType(cxType);
 
         assertThat(result.getValue()).isEqualTo(cxType.getValue());
+    }
+
+    @Test
+    void toUserAttributesCxType_valueUnknownToUserAttributes_throwsIllegalArgument() {
+        assertThatThrownBy(() -> IoActivationMapper.toUserAttributesCxType(
+                it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.CxTypeAuthFleet.BO))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

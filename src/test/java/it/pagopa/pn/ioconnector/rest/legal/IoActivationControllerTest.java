@@ -91,13 +91,12 @@ class IoActivationControllerTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"PA", "RADD", "BO", "XX"})
-    void upsertIoActivation_cxTypeNotAllowed_returns400(String cxType) throws Exception {
-        mockMvc.perform(putRequest(cxType))
+    @Test
+    void upsertIoActivation_unknownCxType_returns400() throws Exception {
+        mockMvc.perform(putRequest("XX"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].code").value(PnExceptionsCodes.ERROR_CODE_PN_GENERIC_INVALIDPARAMETER))
-                .andExpect(jsonPath("$.errors[0].detail").value("Unexpected value '" + cxType + "'"));
+                .andExpect(jsonPath("$.errors[0].detail").value("Unexpected value 'XX'"));
 
         verifyNoInteractions(ioActivationService);
     }
