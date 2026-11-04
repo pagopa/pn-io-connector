@@ -33,9 +33,17 @@ import java.util.Map;
 @Import(SharedAutoConfiguration.class)
 @ConfigurationProperties(prefix = "pn.io-connector")
 public class PnIoConnectorConfig {
+    public static final String PRIVACY_NOTICE_PARAMETER_NAME = "MapPrivacyNotice";
+
     private String ioBaseUrl;
     private String ioLegalBaseUrl;
     private String dataVaultBaseUrl;
+    @NotBlank
+    private String oneTrustBaseUrl;
+    private int oneTrustReadTimeoutMillis;
+    private int oneTrustRetryMaxAttempts;
+    @NotBlank
+    private String userAttributesBaseUrl;
     private String dynamodbTableName;
     private String optinDynamodbTableName;
     @NotBlank
@@ -89,8 +97,9 @@ public class PnIoConnectorConfig {
                     PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR, e);
         }
 
-        if (secrets == null || !StringUtils.hasText(secrets.ioApiKey()) || !StringUtils.hasText(secrets.ioActApiKey())) {
-            throw new PnInternalException("Incomplete legal secret, both IoApiKey and IoActApiKey are required: " + legalSecretsName
+        if (secrets == null || !StringUtils.hasText(secrets.ioApiKey()) || !StringUtils.hasText(secrets.ioActApiKey())
+                || !StringUtils.hasText(secrets.oneTrustToken())) {
+            throw new PnInternalException("Incomplete legal secret, IoApiKey, IoActApiKey and OneTrustToken are required: " + legalSecretsName
                     + " - keys found: " + keys, PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR);
         }
         if (IoWhitelistChecker.parse(secrets.ioWhiteList()).isEmpty()) {
@@ -129,5 +138,25 @@ public class PnIoConnectorConfig {
         IoServiceConfigurationResolver resolver = new IoServiceConfigurationResolver(serviceConfigurations);
         log.info("Loaded IO service configurations from Parameter Store: {}", serviceConfigurationsParameterName);
         return resolver;
+    }
+
+    @Bean
+    public PrivacyNoticeMapping privacyNoticeMapping(SsmClient ssmClient, ObjectMapper objectMapper) {
+        PrivacyNoticeMapping mapping;
+        GetParameterRequest getParameterRequest = GetParameterRequest.builder().name(PRIVACY_NOTICE_PARAMETER_NAME).build();
+        try {
+            GetParameterResponse getParameterResponse = ssmClient.getParameter(getParameterRequest);
+            List<PrivacyNoticeDTO> notices = objectMapper.readValue(
+                getParameterResponse.parameter().value(),
+                new TypeReference<>() {}
+            );
+            mapping = new PrivacyNoticeMapping(notices);
+        } catch (Exception e) {
+            throw new PnInternalException("Failed to retrieve value from Parameter Store: " + PRIVACY_NOTICE_PARAMETER_NAME,
+                    PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_PARAMETERSTORE_ERROR, e);
+        }
+        log.info("Loaded privacy notice mapping from Parameter Store: {} - {} entries",
+                PRIVACY_NOTICE_PARAMETER_NAME, mapping.notices().size());
+        return mapping;
     }
 }

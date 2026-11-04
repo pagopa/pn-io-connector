@@ -5,4 +5,6 @@ public class LogUtils {
     public static final String GET_IO_PROFILE = "getIOProfile";
     public static final String GET_MESSAGE_DETAILS = "getMessageDetails";
     public static final String MANAGE_OPT_IN = "manageOptIn";
+    public static final String UPSERT_IO_ACTIVATION = "upsertIoActivation";
+    public static final String GET_IO_ACTIVATION = "getIoActivation";
 }

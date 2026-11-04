@@ -235,6 +235,20 @@ Parameters:
     Default: 'https://api.io.pagopa.it/api/v1'
     Description: 'Base URL of Backend IO per il dominio legale. Distinto da PnIoConnectorIoBaseUrl, che negli ambienti non produttivi punta al mock delle comunicazioni bonarie.'
 
+  PnIoConnectorOneTrustBaseUrl:
+    Type: String
+    Description: 'Base URL of OneTrust used to resolve the published version of privacy notices'
+
+  PnIoConnectorOneTrustReadTimeoutMillis:
+    Type: Number
+    Default: 3000
+    Description: 'Read timeout in milliseconds of the OneTrust REST client'
+
+  PnIoConnectorOneTrustRetryMaxAttempts:
+    Type: Number
+    Default: 1
+    Description: 'Max retry attempts of the OneTrust REST client'
+
   PnIoConnectorPollingQueueName:
     Type: String
     Description: 'Name of SQS queue pn-io-connector-polling-queue (from storage.yml output)'
@@ -328,6 +342,10 @@ Resources:
         ContainerEnvEntry15: !Sub 'PN_IO_CONNECTOR_IO_LEGAL_BASE_URL=${PnIoConnectorIoLegalBaseUrl}'
         ContainerEnvEntry16: !Sub 'PN_IO_CONNECTOR_OPTIN_DYNAMODB_TABLE_NAME=${PnIoConnectorOptInTableName}'
         ContainerEnvEntry17: !Sub 'PN_IO_CONNECTOR_SERVICE_CONFIGURATIONS_PARAMETER_NAME=${PnIoConnectorServiceConfigurationsParameterName}'
+        ContainerEnvEntry18: !Sub 'PN_IO_CONNECTOR_ONE_TRUST_BASE_URL=${PnIoConnectorOneTrustBaseUrl}'
+        ContainerEnvEntry19: !Sub 'PN_IO_CONNECTOR_USER_ATTRIBUTES_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
+        ContainerEnvEntry20: !Sub 'PN_IO_CONNECTOR_ONE_TRUST_READ_TIMEOUT_MILLIS=${PnIoConnectorOneTrustReadTimeoutMillis}'
+        ContainerEnvEntry21: !Sub 'PN_IO_CONNECTOR_ONE_TRUST_RETRY_MAX_ATTEMPTS=${PnIoConnectorOneTrustRetryMaxAttempts}'
         MappedPaths: '/io-connector/message*,/io-connector/profile*,/io-connector/activations*,/io-connector/user-status*,/io-connector/sendmessage*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
@@ -363,6 +381,7 @@ Resources:
             Resource:
               - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/io-connector/*'
               - !Join [ '', [ !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/', !Ref PnIoConnectorServiceConfigurationsParameterName ] ]
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/MapPrivacyNotice'
           - Effect: Allow
             Action:
               - dynamodb:GetItem
