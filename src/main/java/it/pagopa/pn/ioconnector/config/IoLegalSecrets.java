@@ -7,5 +7,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record IoLegalSecrets(
         @JsonProperty("IoApiKey") String ioApiKey,
         @JsonProperty("IoActApiKey") String ioActApiKey,
-        @JsonProperty("IoWhiteList") String ioWhiteList) {
+        @JsonProperty("IoWhiteList") String ioWhiteList,
+        @JsonProperty("OneTrustToken") String oneTrustToken) {
+
+    @Override
+    public String toString() {
+        return "IoLegalSecrets[ioApiKey=***, ioActApiKey=***, ioWhiteList=***, oneTrustToken=***]";
+    }
 }

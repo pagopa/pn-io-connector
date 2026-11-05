@@ -1,5 +1,7 @@
 package it.pagopa.pn.ioconnector.rest.legal;
 
+import it.pagopa.pn.commons.exceptions.PnInternalException;
+import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.api.IoActivationApi;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.Activation;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.ActivationPayload;
@@ -36,7 +38,12 @@ public class IoActivationController implements IoActivationApi {
                                                          CxTypeAuthFleet xPagopaPnCxType,
                                                          String xPagopaPnCxId,
                                                          ActivationPayload activationPayload) {
-        return ResponseEntity.ok(ioActivationService.upsertActivation(
-                xPagopaPnUid, xPagopaPnCxType, xPagopaPnCxId, activationPayload));
+        try {
+            return ResponseEntity.ok(ioActivationService.upsertActivation(
+                    xPagopaPnUid, xPagopaPnCxType, xPagopaPnCxId, activationPayload));
+        } catch (RuntimeException e) {
+            throw new PnInternalException("Error registering consents or updating the IO activation",
+                    PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_ACTIVATION_ERROR, e);
+        }
     }
 }
