@@ -3,6 +3,7 @@ package it.pagopa.pn.ioconnector.middleware.queue.consumer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.annotation.SqsListener;
+import io.awspring.cloud.sqs.listener.SqsHeaders;
 import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
@@ -13,6 +14,8 @@ import it.pagopa.pn.ioconnector.model.OutcomeEvent;
 import it.pagopa.pn.ioconnector.model.OutcomePollingRequest;
 import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
 import it.pagopa.pn.ioconnector.service.io.IOService;
+import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
+import it.pagopa.pn.ioconnector.utils.LogUtils;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.Message;
@@ -28,8 +31,10 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static it.pagopa.pn.commons.exceptions.PnExceptionsCodes.ERROR_CODE_PN_GENERIC_ERROR;
+import static it.pagopa.pn.ioconnector.utils.LogUtils.POLLING_WORKER_PROCESS;
 
 @Component
 @CustomLog
@@ -46,6 +51,26 @@ public class PollingWorker {
     @SqsListener(value = "${pn.io-connector.sqs-polling-queue-name}")
     public void process(Message<OutcomePollingRequest> message, Acknowledgement acknowledgement) {
         OutcomePollingRequest request = message.getPayload();
+        UUID messageId = message.getHeaders().getId();
+        IoConnectorMDCUtils.initContext(
+                message.getHeaders().get(SqsHeaders.MessageSystemAttributes.SQS_AWS_TRACE_HEADER, String.class),
+                messageId != null ? messageId.toString() : null,
+                request.getRequestId(),
+                request.getIun(),
+                request.getRecipientInternalId(),
+                request.getIoMessageId());
+        log.logStartingProcess(POLLING_WORKER_PROCESS);
+        try {
+            handleMessage(message, request, acknowledgement);
+        } catch (RuntimeException e) {
+            log.logEndingProcess(POLLING_WORKER_PROCESS, false, LogUtils.describeError(e), null);
+            throw e;
+        } finally {
+            IoConnectorMDCUtils.clear();
+        }
+    }
+
+    private void handleMessage(Message<OutcomePollingRequest> message, OutcomePollingRequest request, Acknowledgement acknowledgement) {
         String receiptHandle = (String) message.getHeaders().get("Sqs_ReceiptHandle");
         Instant now = Instant.now();
 
@@ -61,8 +86,11 @@ public class PollingWorker {
                         : remainingInterval;
                 int effectiveWait = (int) Math.min(Math.min(remainingInterval, remainingToExpiry), 43200);
                 if (effectiveWait > 0) {
+                    log.debug("Polling interval not elapsed for requestId={}, changing visibility timeout to {}s",
+                            request.getRequestId(), effectiveWait);
                     changePollingQueueVisibility(receiptHandle, effectiveWait);
                     // Non ack: il messaggio rimane in flight e torna visibile dopo il visibility timeout
+                    log.logEndingProcess(POLLING_WORKER_PROCESS);
                     return;
                 }
             }
@@ -71,6 +99,7 @@ public class PollingWorker {
         if (request.getPollingMaxDate() != null && now.isAfter(request.getPollingMaxDate())) {
             log.warn("Polling exhausted for requestId={}, lastKnownStatus is {}", request.getRequestId(), request.getLastKnownStatus());
             acknowledgement.acknowledge();
+            log.logEndingProcess(POLLING_WORKER_PROCESS);
             return;
         }
 
@@ -98,12 +127,14 @@ public class PollingWorker {
             // Nessun nuovo evento, proseguo col polling
             reEnqueue(request, request.getLastKnownStatus());
             acknowledgement.acknowledge();
+            log.logEndingProcess(POLLING_WORKER_PROCESS);
             return;
         }
 
         // Notifico i nuovi stati e li aggiungo alla eventList
         String nowStr = now.toString();
         for (EventType ev : newEvents) {
+            log.info("New event {} detected for requestId={}", ev, request.getRequestId());
             if (ev.isNotify()) {
                 eventBridgeProducer.publish(OutcomeEvent.builder()
                         .requestId(request.getRequestId())
@@ -132,11 +163,13 @@ public class PollingWorker {
         if (isFinalState(request.isPaymentData(), allEvents)) {
             acknowledgement.acknowledge();
             log.info("Polling ended with final state {} for requestId={}", denormalizedStatus, request.getRequestId());
+            log.logEndingProcess(POLLING_WORKER_PROCESS);
             return;
         }
 
         reEnqueue(request, denormalizedStatus);
         acknowledgement.acknowledge();
+        log.logEndingProcess(POLLING_WORKER_PROCESS);
     }
 
     private boolean isFinalState(boolean hasPaymentData, List<IOConnectorRequestEntity.Event> allEvents) {
@@ -188,6 +221,7 @@ public class PollingWorker {
                 .xPagopaIoConCxId(request.getXPagopaIoConCxId())
                 .iun(request.getIun())
                 .recipientTaxId(request.getRecipientTaxId())
+                .recipientInternalId(request.getRecipientInternalId())
                 .ioMessageId(request.getIoMessageId())
                 .senderServiceId(request.getSenderServiceId())
                 .paymentData(request.isPaymentData())
@@ -199,13 +233,18 @@ public class PollingWorker {
                 .enqueuedAt(Instant.now().toEpochMilli())
                 .build();
         try {
+            String queueName = config.getSqsPollingQueueName();
             String queueUrl = sqsClient.getQueueUrl(GetQueueUrlRequest.builder()
-                    .queueName(config.getSqsPollingQueueName())
+                    .queueName(queueName)
                     .build()).queueUrl();
-            sqsClient.sendMessage(SendMessageRequest.builder()
+            log.info("Re-enqueue polling for requestId={} attemptCount={} lastKnownStatus={}",
+                    next.getRequestId(), next.getAttemptCount(), lastKnownStatus);
+            log.debug("Inserting data {} in SQS {}", next, queueName);
+            sqsClient.sendMessage(IoConnectorMDCUtils.withAwsTraceHeader(SendMessageRequest.builder()
                     .queueUrl(queueUrl)
-                    .messageBody(objectMapper.writeValueAsString(next))
+                    .messageBody(objectMapper.writeValueAsString(next)))
                     .build());
+            log.info("Inserted data in SQS {}", queueName);
         } catch (JsonProcessingException e) {
             throw new PnInternalException("Failed to serialize OutcomePollingRequest", ERROR_CODE_PN_GENERIC_ERROR, e);
         }

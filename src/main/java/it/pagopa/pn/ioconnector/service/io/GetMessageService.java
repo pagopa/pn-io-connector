@@ -1,18 +1,22 @@
 package it.pagopa.pn.ioconnector.service.io;
 
+import it.pagopa.pn.commons.utils.MDCUtils;
 import it.pagopa.pn.ioconnector.exceptions.PnIoGetMessageNotFoundException;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponse;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponseAttachmentsInner;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetMessageResponseDetails;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
+import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.GET_MESSAGE_DETAILS;
@@ -25,10 +29,14 @@ public class GetMessageService {
     private final IOConnectorRequestDao requestDao;
 
     public GetMessageResponse getMessageDetails(String requestId, String cxId) {
+        Map<String, String> previousMdc = new HashMap<>(IoConnectorMDCUtils.addToContext(MDCUtils.MDC_PN_CTX_REQUEST_ID, requestId));
         log.logStartingProcess(GET_MESSAGE_DETAILS);
         try {
             IOConnectorRequestEntity entity = requestDao.findById(requestId)
                     .orElseThrow(() -> new PnIoGetMessageNotFoundException(requestId));
+            if (entity.getIun() != null) {
+                previousMdc.putAll(IoConnectorMDCUtils.addToContext(MDCUtils.MDC_PN_IUN_KEY, entity.getIun()));
+            }
 
             if (!Objects.equals(cxId, entity.getRecipientTaxId())) {
                 throw new PnIoGetMessageNotFoundException(requestId);
@@ -40,6 +48,8 @@ public class GetMessageService {
         } catch (Exception e) {
             log.logEndingProcess(GET_MESSAGE_DETAILS, false, e.getMessage(), e);
             throw e;
+        } finally {
+            IoConnectorMDCUtils.restoreContext(previousMdc);
         }
     }
 

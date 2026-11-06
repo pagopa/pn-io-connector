@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
+import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
@@ -35,6 +36,18 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import it.pagopa.pn.commons.utils.MDCUtils;
+import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
+import it.pagopa.pn.ioconnector.utils.LogEventCaptor;
+import it.pagopa.pn.ioconnector.utils.MdcTestSupport;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
+import org.slf4j.MDC;
+import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeNameForSends;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static it.pagopa.pn.ioconnector.utils.LogUtils.POLLING_WORKER_PROCESS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -298,6 +311,7 @@ class PollingWorkerTest {
         assertThat(requeued.getAttemptCount()).isEqualTo(3);
         assertThat(requeued.getLastKnownStatus()).isEqualTo(EventType.DELIVERED_TO_USER);
         assertThat(requeued.getNoticeCode()).isEqualTo("302000000000000000");
+        assertThat(requeued.getRecipientInternalId()).isEqualTo("INTERNAL-ID-001");
         verify(acknowledgement).acknowledge();
     }
 
@@ -542,6 +556,7 @@ class PollingWorkerTest {
                 .xPagopaIoConCxId("pn-delivery-push")
                 .iun("IUN-001")
                 .recipientTaxId("RSSMRA80A01H501U")
+                .recipientInternalId("INTERNAL-ID-001")
                 .ioMessageId("IO-MSG-001")
                 .senderServiceId("SVC-001")
                 .paymentData(paymentData)
@@ -560,5 +575,213 @@ class PollingWorkerTest {
         return MessageBuilder.withPayload(requestWithTimestamp)
                 .setHeader("Sqs_ReceiptHandle", "test-receipt-handle")
                 .build();
+    }
+
+    private static final String TRACE_HEADER = "Sqs_Msa_AWSTraceHeader";
+    private static final String TAX_ID = "RSSMRA80A01H501U";
+
+    @AfterEach
+    void cleanMdc() {
+        MDC.clear();
+    }
+
+    private Message<OutcomePollingRequest> buildMessageWithTrace(OutcomePollingRequest request, long elapsedSeconds) {
+        OutcomePollingRequest requestWithTimestamp = request.toBuilder()
+                .enqueuedAt(Instant.now().minusSeconds(elapsedSeconds).toEpochMilli())
+                .build();
+        return MessageBuilder.withPayload(requestWithTimestamp)
+                .setHeader("Sqs_ReceiptHandle", "test-receipt-handle")
+                .setHeader(TRACE_HEADER, MdcTestSupport.XRAY_TRACE)
+                .build();
+    }
+
+    private void stubReEnqueuePath(OutcomePollingRequest request) {
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any())).thenReturn(Set.of());
+        mockQueueUrl();
+        when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
+    }
+
+    @Test
+    void process_setsMdcFromHeadersAndPayload() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        Message<OutcomePollingRequest> message = buildMessageWithTrace(request, 0);
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        stubReEnqueuePath(request);
+        when(ioService.getReachedEventTypes(any(), any(), any()))
+                .thenAnswer(MdcTestSupport.capturingInto(captured, Set.<EventType>of()));
+
+        pollingWorker.process(message, acknowledgement);
+
+        assertThat(captured.get())
+                .containsEntry(MDCUtils.MDC_TRACE_ID_KEY, MdcTestSupport.XRAY_TRACE)
+                .containsEntry(MDCUtils.MDC_PN_CTX_MESSAGE_ID, message.getHeaders().getId().toString())
+                .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-POLL-001")
+                .containsEntry(MDCUtils.MDC_PN_IUN_KEY, "IUN-001")
+                .containsEntry(IoConnectorMDCUtils.MDC_IO_MESSAGE_ID_KEY, "IO-MSG-001")
+                .containsEntry(MDCUtils.MDC_CX_ID_KEY, "INTERNAL-ID-001");
+        assertThat(captured.get().values()).doesNotContain(TAX_ID);
+    }
+
+    @Test
+    void process_withoutRecipientInternalId_doesNotSetCxIdInMdc() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false).toBuilder()
+                .recipientInternalId(null)
+                .build();
+        Message<OutcomePollingRequest> message = buildMessageWithTrace(request, 0);
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        stubReEnqueuePath(request);
+        when(ioService.getReachedEventTypes(any(), any(), any()))
+                .thenAnswer(MdcTestSupport.capturingInto(captured, Set.<EventType>of()));
+
+        pollingWorker.process(message, acknowledgement);
+
+        assertThat(captured.get()).doesNotContainKey(MDCUtils.MDC_CX_ID_KEY);
+    }
+
+    @Test
+    void process_clearsMdc_onSuccess() {
+        MDC.put(MDCUtils.MDC_PN_IUN_KEY, "STALE-IUN");
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        stubReEnqueuePath(request);
+
+        pollingWorker.process(buildMessageWithTrace(request, 0), acknowledgement);
+
+        assertThat(MdcTestSupport.snapshot()).isEmpty();
+    }
+
+    @Test
+    void process_clearsMdc_onException() {
+        MDC.put(MDCUtils.MDC_PN_IUN_KEY, "STALE-IUN");
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any())).thenThrow(new RuntimeException("IO down"));
+        Message<OutcomePollingRequest> message = buildMessageWithTrace(request, 0);
+
+        assertThatThrownBy(() -> pollingWorker.process(message, acknowledgement))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(MdcTestSupport.snapshot()).isEmpty();
+    }
+
+    @Test
+    void process_logsStartingAndEndingProcess() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        stubReEnqueuePath(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(PollingWorker.class)) {
+            pollingWorker.process(buildMessageWithTrace(request, 0), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.INFO, "Starting process", POLLING_WORKER_PROCESS)).isTrue();
+            assertThat(logs.hasEvent(Level.INFO, "Ending process", POLLING_WORKER_PROCESS)).isTrue();
+        }
+    }
+
+    @Test
+    void process_visibilityDelay_logsDebug() {
+        OutcomePollingRequest request = buildRequestWith(EventType.SENT_TO_IO, 1, false, 3600, null);
+        mockQueueUrl();
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(PollingWorker.class)) {
+            pollingWorker.process(buildMessageWithTrace(request, 10), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.DEBUG, "visibility")).isTrue();
+        }
+    }
+
+    @Test
+    void process_newEvents_logsInfoPerEvent() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, true);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any()))
+                .thenReturn(Set.of(EventType.DELIVERED_TO_USER, EventType.PAID));
+        mockQueueUrl();
+        when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(PollingWorker.class)) {
+            pollingWorker.process(buildMessageWithTrace(request, 0), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.INFO, "New event DELIVERED_TO_USER")).isTrue();
+            assertThat(logs.hasEvent(Level.INFO, "New event PAID")).isTrue();
+        }
+    }
+
+    @Test
+    void reEnqueue_setsAwsTraceHeaderFromMdc() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        stubReEnqueuePath(request);
+
+        pollingWorker.process(buildMessageWithTrace(request, 0), acknowledgement);
+
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(sqsClient).sendMessage(sqsCaptor.capture());
+        assertThat(sqsCaptor.getValue().messageSystemAttributes())
+                .containsKey(MessageSystemAttributeNameForSends.AWS_TRACE_HEADER);
+        assertThat(sqsCaptor.getValue().messageSystemAttributes()
+                .get(MessageSystemAttributeNameForSends.AWS_TRACE_HEADER).stringValue())
+                .isEqualTo(MdcTestSupport.XRAY_TRACE);
+    }
+
+    @Test
+    void reEnqueue_logsInfoAndSqsInsertion() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        stubReEnqueuePath(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(PollingWorker.class)) {
+            pollingWorker.process(buildMessageWithTrace(request, 0), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.INFO, "Re-enqueue")).isTrue();
+            assertThat(logs.hasEvent(Level.DEBUG, "Inserting data")).isTrue();
+            assertThat(logs.hasEvent(Level.INFO, "Inserted data in SQS pn-io-connector-polling-queue")).isTrue();
+        }
+    }
+
+    @Test
+    void process_neverLogsTaxIdInClear() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        stubReEnqueuePath(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
+            pollingWorker.process(buildMessageWithTrace(request, 0), acknowledgement);
+
+            assertThat(logs.anyEventContains(TAX_ID)).isFalse();
+        }
+    }
+
+    @Test
+    void process_ioError_neverLogsTaxIdInClear() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any())).thenThrow(new PnHttpResponseException(
+                "Error in call url=https://api.io.pagopa.it/api/v1/messages/" + TAX_ID
+                        + "/01JC7ZQ3M0 method=GET statusCode=502 and body=<html>Bad Gateway</html>", 502));
+        Message<OutcomePollingRequest> message = buildMessageWithTrace(request, 0);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
+            assertThatThrownBy(() -> pollingWorker.process(message, acknowledgement))
+                    .isInstanceOf(PnHttpResponseException.class);
+
+            assertThat(logs.hasEvent(Level.WARN, "Ending process", "with errors=",
+                    "PnHttpResponseException", "statusCode=502")).isTrue();
+            assertThat(logs.anyEventContains(TAX_ID)).isFalse();
+            assertThat(logs.events()).allMatch(e -> e.getThrowableProxy() == null);
+        }
+    }
+
+    @Test
+    void process_unexpectedException_neverLogsTaxIdInClear() {
+        OutcomePollingRequest request = buildRequest(EventType.SENT_TO_IO, 0, false);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any()))
+                .thenThrow(new IllegalStateException("unexpected failure for " + TAX_ID));
+        Message<OutcomePollingRequest> message = buildMessageWithTrace(request, 0);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
+            assertThatThrownBy(() -> pollingWorker.process(message, acknowledgement))
+                    .isInstanceOf(IllegalStateException.class);
+
+            assertThat(logs.hasEvent(Level.WARN, "Ending process", "with errors=", "IllegalStateException")).isTrue();
+            assertThat(logs.anyEventContains(TAX_ID)).isFalse();
+        }
     }
 }
