@@ -169,7 +169,7 @@ class SendIoMessageServiceTest {
     }
 
     @Test
-    void manageOptIn_WhenIoSendFails_ThenReturnsErrorOptInAndSavesRecord() {
+    void manageOptIn_WhenIoSendFails_ThenReturnsErrorOptInWithoutSavingRecord() {
         when(ioConnectorOptInDAO.get(anyString())).thenReturn(Optional.empty());
         when(ioLegalMessageBuilder.buildOptInMessage(any())).thenReturn(new NewMessage());
         when(ioLegalClient.sendOptInMessage(any())).thenThrow(new PnHttpResponseException("Internal Server Error", 500));
@@ -178,11 +178,45 @@ class SendIoMessageServiceTest {
 
         assertThat(result.getResult()).isEqualTo(SendMessageResponse.ResultEnum.ERROR_OPTIN);
         assertThat(result.getId()).isNull();
-        verify(ioConnectorOptInDAO).save(any());
+        verify(ioConnectorOptInDAO, never()).save(any());
     }
 
     @Test
-    void manageOptIn_WhenOptInDisabledByConf_ThenDoesNotSendButSavesRecord() {
+    void manageOptIn_WhenLastSendIsOlderThanCooldownAndIoSendFails_ThenDoesNotRefreshRecord() {
+        Instant lastModified = Instant.now().minus(COOLDOWN_DAYS + 1L, ChronoUnit.DAYS);
+        when(ioConnectorOptInDAO.get(anyString())).thenReturn(Optional.of(recordWithLastModified(lastModified)));
+        when(ioLegalMessageBuilder.buildOptInMessage(any())).thenReturn(new NewMessage());
+        when(ioLegalClient.sendOptInMessage(any())).thenThrow(new PnHttpResponseException("Internal Server Error", 500));
+
+        SendMessageResponse result = sendIoMessageService.manageOptIn(buildRequest());
+
+        assertThat(result.getResult()).isEqualTo(SendMessageResponse.ResultEnum.ERROR_OPTIN);
+        assertThat(result.getId()).isNull();
+        verify(ioConnectorOptInDAO, never()).save(any());
+    }
+
+    @Test
+    void manageOptIn_WhenPreviousAttemptFailed_ThenNextAttemptSendsOptIn() {
+        NewMessage optInMessage = new NewMessage();
+        when(ioConnectorOptInDAO.get(anyString())).thenReturn(Optional.empty());
+        when(ioLegalMessageBuilder.buildOptInMessage(any())).thenReturn(optInMessage);
+        when(ioLegalClient.sendOptInMessage(optInMessage))
+                .thenThrow(new PnHttpResponseException("Internal Server Error", 500))
+                .thenReturn(IO_MESSAGE_ID);
+
+        SendMessageResponse first = sendIoMessageService.manageOptIn(buildRequest());
+        assertThat(first.getResult()).isEqualTo(SendMessageResponse.ResultEnum.ERROR_OPTIN);
+        verify(ioConnectorOptInDAO, never()).save(any());
+
+        SendMessageResponse second = sendIoMessageService.manageOptIn(buildRequest());
+        assertThat(second.getResult()).isEqualTo(SendMessageResponse.ResultEnum.SENT_OPTIN);
+        assertThat(second.getId()).isEqualTo(IO_MESSAGE_ID);
+        verify(ioConnectorOptInDAO, times(1)).save(any());
+        verify(ioLegalClient, times(2)).sendOptInMessage(optInMessage);
+    }
+
+    @Test
+    void manageOptIn_WhenOptInDisabledByConf_ThenDoesNotSendAndDoesNotSaveRecord() {
         config.setEnableIoActivationMessage(false);
         when(ioConnectorOptInDAO.get(anyString())).thenReturn(Optional.empty());
 
@@ -190,7 +224,7 @@ class SendIoMessageServiceTest {
 
         assertThat(result.getResult()).isEqualTo(SendMessageResponse.ResultEnum.NOT_SENT_OPTIN_DISABLED_BY_CONF);
         verify(ioLegalClient, never()).sendOptInMessage(any());
-        verify(ioConnectorOptInDAO).save(any());
+        verify(ioConnectorOptInDAO, never()).save(any());
     }
 
     @Test

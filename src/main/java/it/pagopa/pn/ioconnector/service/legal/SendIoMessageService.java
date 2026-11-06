@@ -144,7 +144,8 @@ public class SendIoMessageService {
 
     /**
      * Valuta il cooldown sugli invii di messaggi di opt-in,
-     * se trascorso invia il messaggio, altrimenti ritorna NOT_SENT_OPTIN_ALREADY_SENT
+     * se trascorso invia il messaggio, altrimenti ritorna NOT_SENT_OPTIN_ALREADY_SENT.
+     * Il cooldown viene registrato solo se l'opt-in è stato effettivamente inviato (SENT_OPTIN).
      *
      * @return SendMessageResponse
      */
@@ -161,7 +162,12 @@ public class SendIoMessageService {
             log.info("Cooldown scaduto, opt-in inviabile a taxId={} iun={} lastModified={} requestId={}",
                     LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), lastSendDate, request.getRequestId());
             SendMessageResponse res = sendOptInMessage(request);
-            ioConnectorOptInDAO.save(IOConnectorOptInEntity.of(hashedTaxId, config.getIoOptinMinDays()));
+            if (res.getResult() == SendMessageResponse.ResultEnum.SENT_OPTIN) {
+                ioConnectorOptInDAO.save(IOConnectorOptInEntity.of(hashedTaxId, config.getIoOptinMinDays()));
+            } else {
+                log.info("Opt-in non inviato, cooldown non registrato result={} taxId={} iun={} requestId={}",
+                        res.getResult(), LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), request.getRequestId());
+            }
             log.logEndingProcess(MANAGE_OPT_IN);
             return res;
         } else {
