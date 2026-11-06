@@ -346,7 +346,8 @@ Resources:
         ContainerEnvEntry19: !Sub 'PN_IO_CONNECTOR_USER_ATTRIBUTES_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
         ContainerEnvEntry20: !Sub 'PN_IO_CONNECTOR_ONE_TRUST_READ_TIMEOUT_MILLIS=${PnIoConnectorOneTrustReadTimeoutMillis}'
         ContainerEnvEntry21: !Sub 'PN_IO_CONNECTOR_ONE_TRUST_RETRY_MAX_ATTEMPTS=${PnIoConnectorOneTrustRetryMaxAttempts}'
-        MappedPaths: '/io-connector/message*,/io-connector/profile*,/io-connector/activations*,/io-connector/user-status*,/io-connector/sendmessage*'
+        ContainerEnvEntry22: !Sub 'PN_TIMELINE_SERVICE_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
+        MappedPaths: '/io-connector/*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
         VpcId: !Ref VpcId

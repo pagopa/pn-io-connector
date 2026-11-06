@@ -2,7 +2,7 @@ openapi: 3.0.1
 info:
   title: >-
     ${stageVariables.ProjectName}-${stageVariables.MicroServiceUniqueName}-${stageVariables.IntendedUsage}
-  version: TdWM64eyvoiXW/6/ZJP+pnHZ6dEtkX61pC4JC+9+ZFM=
+  version: t3q3heB8E5+awp82EBPolr6DwzDy+ljbL8TpkIp31C4=
 servers:
   - url: https://${stageVariables.DnsName}/{basePath}
     variables:
@@ -150,8 +150,82 @@ paths:
         passthroughBehavior: when_no_match
         timeoutInMillis: 29000
         type: aws_proxy
+  /io/v1/notification-disclaimer/{iun}:
+    get:
+      tags:
+        - FromIoMessage
+      summary: Disclaimer di pre-apertura notifica
+      operationId: notificationDisclaimer
+      parameters:
+        - name: iun
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificativo Univoco Notifica su SEND.
+        - $ref: '#/components/parameters/cxIdAuthFleet'
+      responses:
+        '200':
+          description: Contenuto del bottom sheet di pre-apertura notifica.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreconditionContent'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '500':
+          $ref: '#/components/responses/Problem'
+      security:
+        - pn-auth-fleet_LollipopAuthorizer_openapi: []
+        - api_key_openapi: []
+      x-amazon-apigateway-integration:
+        uri: >-
+          http://${stageVariables.ApplicationLoadBalancerDomain}:8080/${stageVariables.ServiceApiPath}/io/v1/notification-disclaimer/{iun}
+        connectionId: ${stageVariables.NetworkLoadBalancerLink}
+        httpMethod: ANY
+        requestParameters:
+          integration.request.header.x-pagopa-pn-cx-id: context.authorizer.cx_id
+          integration.request.header.x-pagopa-pn-cx-role: context.authorizer.cx_role
+          integration.request.header.x-pagopa-pn-uid: context.authorizer.uid
+          integration.request.header.x-pagopa-pn-jti: context.authorizer.cx_jti
+          integration.request.header.x-pagopa-pn-cx-type: context.authorizer.cx_type
+          integration.request.header.x-pagopa-pn-cx-groups: context.authorizer.cx_groups
+          integration.request.header.x-pagopa-pn-src-ch-details: context.authorizer.sourceChannelDetails
+          integration.request.header.x-pagopa-pn-src-ch: '''IO'''
+          integration.request.header.x-pagopa-pn-name: context.authorizer.name
+          integration.request.header.x-pagopa-pn-family-name: context.authorizer.familyName
+          integration.request.header.x-pagopa-pn-result-code: context.authorizer.resultCode
+          integration.request.path.iun: method.request.path.iun
+        passthroughBehavior: when_no_match
+        connectionType: VPC_LINK
+        timeoutInMillis: 29000
+        type: http_proxy
+    options:
+      operationId: Options for /io/v1/notification-disclaimer/{iun} API CORS
+      x-amazon-apigateway-integration:
+        uri: >-
+          http://${stageVariables.ApplicationLoadBalancerDomain}:8080/${stageVariables.ServiceApiPath}/io/v1/notification-disclaimer/{iun}
+        connectionId: ${stageVariables.NetworkLoadBalancerLink}
+        httpMethod: ANY
+        requestParameters:
+          integration.request.path.iun: method.request.path.iun
+        passthroughBehavior: when_no_match
+        connectionType: VPC_LINK
+        timeoutInMillis: 29000
+        type: http_proxy
 components:
   parameters:
+    cxIdAuthFleet:
+      name: x-pagopa-pn-cx-id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: >-
+        Identificativo interno (internalId) del destinatario, iniettato dall'API
+        Gateway.
     cxTaxId:
       name: x-pagopa-cx-taxid
       in: header
@@ -233,6 +307,31 @@ components:
       schema:
         type: string
   schemas:
+    PreconditionContent:
+      type: object
+      description: Contenuto del bottom sheet di pre-apertura notifica.
+      required:
+        - title
+        - markdown
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          description: Titolo del bottom sheet.
+        markdown:
+          type: string
+          description: Corpo del bottom sheet in formato Markdown.
+    Problem:
+      type: object
+      properties:
+        status:
+          type: number
+        title:
+          type: string
+        detail:
+          type: string
+        traceId:
+          type: string
     GetMessageResponse:
       type: object
       description: Dettagli del messaggio e lista degli allegati esposti a BackEnd IO.
@@ -263,7 +362,13 @@ components:
               category:
                 type: string
                 default: DOCUMENT
-  responses: {}
+  responses:
+    Problem:
+      description: Errore.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
   securitySchemes:
     api_key_openapi:
       type: apiKey
@@ -285,6 +390,8 @@ components:
 tags:
   - name: IoConnector
     description: Operazioni verso App IO
+  - name: FromIoMessage
+    description: Endpoint invocati da App IO per il disclaimer di pre-apertura notifica
 x-amazon-apigateway-gateway-responses:
   DEFAULT_5XX:
     responseParameters:
