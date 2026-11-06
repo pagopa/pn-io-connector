@@ -180,8 +180,7 @@ paths:
         viene effettuato l'upsert dell'attivazione su App IO. Se lo stato
         richiesto è INACTIVE i consensi non vengono toccati. In caso di errore
         HTTP da IO viene tentato un fallback leggendo lo stato corrente tramite
-        getIoActivation. Un errore sul ramo dei consensi interrompe
-        l'operazione senza alcuna chiamata verso App IO.
+        getIoActivation.
       operationId: upsertIoActivation
       parameters:
         - $ref: 'remote-refs.yaml#/components/parameters/uidAuthFleet'

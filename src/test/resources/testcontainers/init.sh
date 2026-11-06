@@ -147,7 +147,7 @@ create_secret() {
 initialize_secrets() {
   log "Initializing Secrets Manager"
   create_secret "$SECRETS_NAME" '{"io-api-key":"test-api-key"}' || return 1
-  create_secret "$LEGAL_SECRETS_NAME" '{"IoApiKey":"test-legal-api-key","IoActApiKey":"test-optin-api-key","IoWhiteList":"*"}' || return 1
+  create_secret "$LEGAL_SECRETS_NAME" '{"IoApiKey":"test-legal-api-key","IoActApiKey":"test-optin-api-key","IoWhiteList":"SPNDNL80R13C555X","OneTrustToken":"test-onetrust-token"}' || return 1
 }
 
 create_parameter() {
@@ -179,6 +179,10 @@ initialize_ssm() {
     "SVC-CONF-001":{"configurationId":"01KTNGX3FQV0R3RG8SH1XE3GXS","organizationFiscalCode":"12345678910"},
     "000000000":{"configurationId":"01KTNGX3FQV0R3RG8SH1XE3GXS","organizationFiscalCode":"12345678910"}
   }' || return 1
+  create_parameter "MapPrivacyNotice" '[
+    {"consentsType":"TOS","portalType":"PF","privacyNoticeId":"test-tos-pf","defaultVersion":1},
+    {"consentsType":"DATAPRIVACY","portalType":"PF","privacyNoticeId":"test-dataprivacy-pf","defaultVersion":1}
+  ]' || return 1
 }
 
 initialize_dynamo() {
