@@ -26,7 +26,9 @@ public class IOConnectorRequestEntity {
     private String xPagopaIoConCxId;
     private String recipientTaxId;
     private String senderServiceId;
+    @ToString.Exclude
     private String subject;
+    @ToString.Exclude
     private String markdown;
     private List<Attachment> attachments;
     private Boolean sensitiveContent;

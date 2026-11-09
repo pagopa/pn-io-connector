@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.time.Instant;
 import java.util.List;
@@ -19,7 +20,9 @@ public class MessageSendRequest {
     private String iun;
     private String recipientTaxId;
     private String senderServiceId;
+    @ToString.Exclude
     private String subject;
+    @ToString.Exclude
     private String markdown;
     private List<Attachment> attachments;
     private Boolean sensitiveContent;
