@@ -59,6 +59,7 @@ public class PnIoConnectorConfig {
     private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
     private int ioOptinMinDays;
+    private String timelineServiceBaseUrl;
     private boolean enableIoMessage;
     private boolean enableIoActivationMessage;
     private String ioRemoteContentCfgId;
