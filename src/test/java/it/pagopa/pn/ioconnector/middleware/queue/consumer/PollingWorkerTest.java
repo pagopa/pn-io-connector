@@ -822,7 +822,7 @@ class PollingWorkerTest {
         when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
         when(ioService.getReachedEventTypes(any(), any(), any())).thenThrow(new PnHttpResponseException(
                 "Error in call url=https://api.io.pagopa.it/api/v1/messages/" + TAX_ID
-                        + "/01JC7ZQ3M0 method=GET statusCode=502 and body=<html>Bad Gateway</html>", 502));
+                        + "/01JC7ZQ3M0 method=GET statusCode=400 and body=<html>Bad Request</html>", 400));
         Message<OutcomePollingRequest> message = buildMessageWithTrace(request, 0);
 
         try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
@@ -830,9 +830,29 @@ class PollingWorkerTest {
                     .isInstanceOf(PnHttpResponseException.class);
 
             assertThat(logs.hasEvent(Level.WARN, "Ending process", "with errors=",
-                    "PnHttpResponseException", "statusCode=502")).isTrue();
+                    "PnHttpResponseException", "statusCode=400")).isTrue();
             assertThat(logs.anyEventContains(TAX_ID)).isFalse();
             assertThat(logs.events()).allMatch(e -> e.getThrowableProxy() == null);
+        }
+    }
+
+    @Test
+    void process_ioRetryableError_logsEndingWithRetryScheduled() {
+        OutcomePollingRequest request = buildRequest(EventType.DELIVERED_TO_USER, 2, true);
+        Message<OutcomePollingRequest> message = buildMessage(request, 3700);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.getReachedEventTypes(any(), any(), any())).thenThrow(new PnHttpResponseException(
+                "Error in call url=https://api.io.pagopa.it/api/v1/messages/" + TAX_ID
+                        + "/01JC7ZQ3M0 method=GET statusCode=503 and body=<html>Service Unavailable</html>", 503));
+        mockQueueUrl();
+        when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
+
+        try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
+            pollingWorker.process(message, acknowledgement);
+
+            assertThat(logs.hasEvent(Level.WARN, "Ending process", "with errors=",
+                    "retry scheduled statusCode=503")).isTrue();
+            assertThat(logs.anyEventContains(TAX_ID)).isFalse();
         }
     }
 

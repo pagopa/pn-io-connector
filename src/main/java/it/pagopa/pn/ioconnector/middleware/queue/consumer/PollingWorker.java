@@ -124,6 +124,7 @@ public class PollingWorker {
             );
             reEnqueue(request, request.getLastKnownStatus());
             acknowledgement.acknowledge();
+            log.logEndingProcess(POLLING_WORKER_PROCESS, false, "retry scheduled statusCode=" + ex.getStatusCode(), null);
             return;
         }
 
