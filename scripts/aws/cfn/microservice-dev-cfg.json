@@ -12,6 +12,9 @@
     "PnIoConnectorIoLegalBaseUrl": "https://api.io.pagopa.it/api/v1",
     "PnIoConnectorOneTrustBaseUrl": "http://pn-ex-Appli-1TF83JFIR9AF3-439926467.eu-south-1.elb.amazonaws.com:8080/onetrust",
     "PnIoConnectorOneTrustReadTimeoutMillis": "3000",
-    "PnIoConnectorOneTrustRetryMaxAttempts": "1"
+    "PnIoConnectorOneTrustRetryMaxAttempts": "1",
+    "PortalUrl": "https://portale.dev.pn.pagopa.it",
+    "SendPortalUrl": "https://notifichedigitali.pagopa.it",
+    "IoRemoteContentCfgId": "01HMVMHCZZ8D0VTFWMRHBM5D6F"
   }
 }

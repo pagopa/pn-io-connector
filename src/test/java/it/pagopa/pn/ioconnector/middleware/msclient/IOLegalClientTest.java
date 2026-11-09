@@ -1,5 +1,7 @@
 package it.pagopa.pn.ioconnector.middleware.msclient;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.config.IoWhitelistChecker;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.DefaultApi;
@@ -9,6 +11,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.CreatedMess
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.FiscalCodePayload;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.NewMessage;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +19,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+
+import static it.pagopa.pn.ioconnector.springbootcfg.SpringAnalyzerActivation.IO_SENT_FAILURE;
+import static it.pagopa.pn.ioconnector.springbootcfg.SpringAnalyzerActivation.IO_SENT_SUCCESSFULLY;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -40,12 +46,26 @@ class IOLegalClientTest {
     @Mock
     private DefaultApi ioOptInApi;
 
+    private MeterRegistry meterRegistry;
+
+    @BeforeEach
+    void setUp() {
+        // contatori registrati come in SpringAnalyzerActivation
+        meterRegistry = new SimpleMeterRegistry();
+        meterRegistry.counter(IO_SENT_SUCCESSFULLY);
+        meterRegistry.counter(IO_SENT_FAILURE);
+    }
+
     private IOLegalClient clientWithWhitelist() {
-        return new IOLegalClient(ioLegalApi, ioOptInApi, new IoWhitelistChecker(ALLOWED_CF));
+        return new IOLegalClient(ioLegalApi, ioOptInApi, new IoWhitelistChecker(ALLOWED_CF), meterRegistry);
     }
 
     private IOLegalClient clientWithoutWhitelist() {
-        return new IOLegalClient(ioLegalApi, ioOptInApi, new IoWhitelistChecker("*"));
+        return new IOLegalClient(ioLegalApi, ioOptInApi, new IoWhitelistChecker("*"), meterRegistry);
+    }
+
+    private double counter(String name) {
+        return meterRegistry.get(name).counter().count();
     }
 
     private static FiscalCodePayload fiscalCode(String cf) {
@@ -184,4 +204,76 @@ class IOLegalClientTest {
         }
     }
 
+    @Nested
+    class Metrics {
+
+        @Test
+        void sendCourtesyMessage_ok_incrementsSuccess() {
+            when(ioLegalApi.submitMessageforUserWithFiscalCodeInBody(any()))
+                    .thenReturn(new CreatedMessage().id("courtesy-id"));
+
+            clientWithoutWhitelist().sendCourtesyMessage(newMessage(ALLOWED_CF));
+
+            assertEquals(1.0, counter(IO_SENT_SUCCESSFULLY));
+            assertEquals(0.0, counter(IO_SENT_FAILURE));
+        }
+
+        @Test
+        void sendOptInMessage_ok_incrementsSuccess() {
+            when(ioOptInApi.submitMessageforUserWithFiscalCodeInBody(any()))
+                    .thenReturn(new CreatedMessage().id("optin-id"));
+
+            clientWithoutWhitelist().sendOptInMessage(newMessage(ALLOWED_CF));
+
+            assertEquals(1.0, counter(IO_SENT_SUCCESSFULLY));
+            assertEquals(0.0, counter(IO_SENT_FAILURE));
+        }
+
+        @Test
+        void sendCourtesyMessage_httpError_incrementsFailureAndRethrows() {
+            when(ioLegalApi.submitMessageforUserWithFiscalCodeInBody(any()))
+                    .thenThrow(new PnHttpResponseException("Internal Server Error", 500));
+            IOLegalClient client = clientWithoutWhitelist();
+            NewMessage message = newMessage(ALLOWED_CF);
+
+            assertThrows(PnHttpResponseException.class, () -> client.sendCourtesyMessage(message));
+
+            assertEquals(0.0, counter(IO_SENT_SUCCESSFULLY));
+            assertEquals(1.0, counter(IO_SENT_FAILURE));
+        }
+
+        @Test
+        void sendOptInMessage_nonHttpError_incrementsFailureAndRethrows() {
+            when(ioOptInApi.submitMessageforUserWithFiscalCodeInBody(any()))
+                    .thenThrow(new IllegalStateException("connection reset"));
+            IOLegalClient client = clientWithoutWhitelist();
+            NewMessage message = newMessage(ALLOWED_CF);
+
+            assertThrows(IllegalStateException.class, () -> client.sendOptInMessage(message));
+
+            assertEquals(0.0, counter(IO_SENT_SUCCESSFULLY));
+            assertEquals(1.0, counter(IO_SENT_FAILURE));
+        }
+
+        @Test
+        void sendMessage_notInWhitelist_doesNotIncrement() {
+            IOLegalClient client = clientWithWhitelist();
+
+            client.sendCourtesyMessage(newMessage(BLOCKED_CF));
+            client.sendOptInMessage(newMessage(BLOCKED_CF));
+
+            assertEquals(0.0, counter(IO_SENT_SUCCESSFULLY));
+            assertEquals(0.0, counter(IO_SENT_FAILURE));
+        }
+
+        @Test
+        void getProfile_doesNotIncrement() {
+            when(ioLegalApi.getProfileByPOST(any())).thenReturn(new LimitedProfile());
+
+            clientWithoutWhitelist().getProfile(fiscalCode(ALLOWED_CF));
+
+            assertEquals(0.0, counter(IO_SENT_SUCCESSFULLY));
+            assertEquals(0.0, counter(IO_SENT_FAILURE));
+        }
+    }
 }
