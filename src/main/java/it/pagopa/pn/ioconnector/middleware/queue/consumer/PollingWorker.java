@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.annotation.SqsListener;
 import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
+import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
@@ -79,8 +80,23 @@ public class PollingWorker {
         String apiKey = ioService.getServiceUseKey(request.getSenderServiceId());
 
         // Calcolo i nuovi stati rilevati da IO
-        Set<EventType> reached = ioService.getReachedEventTypes(
-                request.getRecipientTaxId(), request.getIoMessageId(), apiKey);
+        Set<EventType> reached;
+        try {
+            reached = ioService.getReachedEventTypes(request.getRecipientTaxId(), request.getIoMessageId(), apiKey);
+        } catch (PnHttpResponseException ex) {
+            if (!isRetryable(ex.getStatusCode())) {
+                throw ex;
+            }
+            // Se IO ritorna 429 o 5xx, considero l'attuale tentativo di polling fallito e riaccodo per il successivo
+            log.warn("Polling attempt failed for requestId={} with statusCode={}, scheduling next attempt at {}",
+                    request.getRequestId(),
+                    ex.getStatusCode(),
+                    Instant.now().plusSeconds(request.getPollingIntervalSeconds())
+            );
+            reEnqueue(request, request.getLastKnownStatus());
+            acknowledgement.acknowledge();
+            return;
+        }
 
         // Recupero gli stati già elaborati
         List<IOConnectorRequestEntity.Event> allEvents = new ArrayList<>();
@@ -98,6 +114,7 @@ public class PollingWorker {
             // Nessun nuovo evento, proseguo col polling
             reEnqueue(request, request.getLastKnownStatus());
             acknowledgement.acknowledge();
+            logAttemptCompleted(request, request.getLastKnownStatus());
             return;
         }
 
@@ -131,12 +148,13 @@ public class PollingWorker {
 
         if (isFinalState(request.isPaymentData(), allEvents)) {
             acknowledgement.acknowledge();
-            log.info("Polling ended with final state {} for requestId={}", denormalizedStatus, request.getRequestId());
+            log.info("Polling ended for requestId={}, lastKnownStatus is {}", request.getRequestId(), denormalizedStatus);
             return;
         }
 
         reEnqueue(request, denormalizedStatus);
         acknowledgement.acknowledge();
+        logAttemptCompleted(request, denormalizedStatus);
     }
 
     private boolean isFinalState(boolean hasPaymentData, List<IOConnectorRequestEntity.Event> allEvents) {
@@ -220,5 +238,17 @@ public class PollingWorker {
                 .receiptHandle(receiptHandle)
                 .visibilityTimeout(seconds)
                 .build());
+    }
+
+    private void logAttemptCompleted(OutcomePollingRequest request, EventType lastKnownStatus) {
+        log.info("Polling attempt completed successfully for requestId={}, next attempt scheduled at {}, lastKnownStatus is {}",
+                request.getRequestId(),
+                Instant.now().plusSeconds(request.getPollingIntervalSeconds()),
+                lastKnownStatus
+        );
+    }
+
+    private boolean isRetryable(int statusCode) {
+        return statusCode == 429 || statusCode >= 500;
     }
 }
