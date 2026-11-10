@@ -25,6 +25,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -38,10 +39,25 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import it.pagopa.pn.commons.utils.MDCUtils;
+import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
+import it.pagopa.pn.ioconnector.utils.LogEventCaptor;
+import it.pagopa.pn.ioconnector.utils.MdcTestSupport;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
+import org.slf4j.MDC;
+import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeNameForSends;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static it.pagopa.pn.ioconnector.utils.LogUtils.CHECK_ATTACHMENTS;
+import static it.pagopa.pn.ioconnector.utils.LogUtils.CHECK_SENDER_ALLOWED;
+import static it.pagopa.pn.ioconnector.utils.LogUtils.SEND_WORKER_PROCESS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -786,5 +802,353 @@ class SendWorkerTest {
         return MessageBuilder.withPayload(request)
                 .setHeader("Sqs_ReceiptHandle", "test-receipt-handle")
                 .build();
+    }
+
+    private static final String TRACE_HEADER = "Sqs_Msa_AWSTraceHeader";
+
+    @AfterEach
+    void cleanMdc() {
+        MDC.clear();
+    }
+
+    private Message<MessageSendRequest> buildMessageWithTrace(MessageSendRequest request) {
+        return MessageBuilder.withPayload(request)
+                .setHeader("Sqs_ReceiptHandle", "test-receipt-handle")
+                .setHeader(TRACE_HEADER, MdcTestSupport.XRAY_TRACE)
+                .build();
+    }
+
+    private void stubHappyPath(MessageSendRequest request) {
+        stubHappyPath(request, invocation -> "IO-MSG-001");
+    }
+
+    private void stubHappyPath(MessageSendRequest request, Answer<String> sendMessageAnswer) {
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(new LimitedProfile().senderAllowed(true));
+        when(ioService.sendMessage(eq(request), eq("api-key"))).thenAnswer(sendMessageAnswer);
+        when(config.getSqsPollingQueueName()).thenReturn("pn-io-connector-polling-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder().queueUrl("https://sqs/polling-queue").build());
+        when(sqsClient.sendMessage(any(SendMessageRequest.class))).thenReturn(SendMessageResponse.builder().build());
+    }
+
+    private void stubSenderNotAllowed(MessageSendRequest request) {
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(new LimitedProfile().senderAllowed(false));
+    }
+
+    private void stubNonRetryableFailure(MessageSendRequest request) {
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(new LimitedProfile().senderAllowed(true));
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new PnHttpResponseException("Error in call url=https://api.io.pagopa.it/api/v1/messages"
+                        + " method=POST statusCode=404 and body=<html>Not Found</html>", 404));
+    }
+
+    private static PnHttpResponseException realisticIoException(int status) {
+        return new PnHttpResponseException("Error in call url=https://api.io.pagopa.it/api/v1/messages/"
+                + REAL_TAX_ID + "/01JC7ZQ3M0 method=GET statusCode=" + status
+                + " and body=<html>Bad Gateway</html>", status);
+    }
+
+    @Test
+    void process_setsMdcFromHeadersAndPayload() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessageWithTrace(request);
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        stubSenderNotAllowed(request);
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenAnswer(MdcTestSupport.capturingInto(captured, REAL_TAX_ID));
+
+        sendWorker.process(message, acknowledgement);
+
+        assertThat(captured.get())
+                .containsEntry(MDCUtils.MDC_TRACE_ID_KEY, MdcTestSupport.XRAY_TRACE)
+                .containsEntry(MDCUtils.MDC_PN_CTX_MESSAGE_ID, message.getHeaders().getId().toString())
+                .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-001")
+                .containsEntry(MDCUtils.MDC_PN_IUN_KEY, "IUN-001")
+                .containsEntry(MDCUtils.MDC_CX_ID_KEY, TOKEN_TAX_ID);
+    }
+
+    @Test
+    void process_cxIdIsInternalIdNotTaxId() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessageWithTrace(request);
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        stubHappyPath(request, MdcTestSupport.capturingInto(captured, "IO-MSG-001"));
+
+        sendWorker.process(message, acknowledgement);
+
+        assertThat(captured.get()).containsEntry(MDCUtils.MDC_CX_ID_KEY, TOKEN_TAX_ID);
+        assertThat(captured.get().values()).doesNotContain(REAL_TAX_ID);
+    }
+
+    @Test
+    void process_setsIoMessageIdAfterSend() {
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessageWithTrace(request);
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        stubHappyPath(request);
+        doAnswer(invocation -> {
+            captured.set(MdcTestSupport.snapshot());
+            return null;
+        }).when(eventBridgeProducer).publish(any());
+
+        sendWorker.process(message, acknowledgement);
+
+        assertThat(captured.get()).containsEntry(IoConnectorMDCUtils.MDC_IO_MESSAGE_ID_KEY, "IO-MSG-001");
+    }
+
+    @Test
+    void process_clearsMdc_onSuccess() {
+        MDC.put(MDCUtils.MDC_PN_IUN_KEY, "STALE-IUN");
+        MessageSendRequest request = buildRequest();
+        stubHappyPath(request);
+
+        sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+        assertThat(MdcTestSupport.snapshot()).isEmpty();
+    }
+
+    @Test
+    void process_clearsMdc_onException() {
+        MDC.put(MDCUtils.MDC_PN_IUN_KEY, "STALE-IUN");
+        MessageSendRequest request = buildRequest();
+        Message<MessageSendRequest> message = buildMessageWithTrace(request);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(new LimitedProfile().senderAllowed(true));
+        when(ioService.sendMessage(eq(request), eq("api-key"))).thenThrow(new RuntimeException("IO 500"));
+
+        assertThatThrownBy(() -> sendWorker.process(message, acknowledgement))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(MdcTestSupport.snapshot()).isEmpty();
+    }
+
+    @Test
+    void process_logsStartingAndEndingProcess() {
+        MessageSendRequest request = buildRequest();
+        stubHappyPath(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendWorker.class)) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.INFO, "Starting process", SEND_WORKER_PROCESS)).isTrue();
+            assertThat(logs.hasEvent(Level.INFO, "Ending process", SEND_WORKER_PROCESS)).isTrue();
+        }
+    }
+
+    @Test
+    void process_failedToSend_logsEndingProcessWithErrors() {
+        MessageSendRequest request = buildRequest();
+        stubNonRetryableFailure(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendWorker.class)) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.WARN, "Ending process", "with errors=")).isTrue();
+        }
+    }
+
+    @Test
+    void process_invalidAttachments_logsCheckingFailed() {
+        MessageSendRequest request = buildRequest();
+        request.setAttachments(List.of(MessageSendRequest.Attachment.builder().id("att-1").fileKey("documento.docx").build()));
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendWorker.class)) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.WARN, "Checking", CHECK_ATTACHMENTS, "failed reason=")).isTrue();
+        }
+    }
+
+    @Test
+    void process_validAttachments_logsCheckingPassed() {
+        MessageSendRequest request = buildRequest();
+        request.setAttachments(List.of(MessageSendRequest.Attachment.builder()
+                .id("att-1").name("document.pdf").fileKey("safestorage://document.pdf").build()));
+        stubSenderNotAllowed(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendWorker.class)) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.INFO, "Checking", CHECK_ATTACHMENTS, "passed")).isTrue();
+        }
+    }
+
+    @Test
+    void process_senderNotAllowed_logsCheckingFailed() {
+        MessageSendRequest request = buildRequest();
+        stubSenderNotAllowed(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendWorker.class)) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.WARN, "Checking", CHECK_SENDER_ALLOWED, "failed reason=")).isTrue();
+        }
+    }
+
+    @Test
+    void sendMessage_retryableError_logsWarnWithStepAndDelay() {
+        MessageSendRequest request = buildRequest();
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(new LimitedProfile().senderAllowed(true));
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new PnHttpResponseException("Too Many Requests", 429));
+        when(dao.findById(request.getRequestId())).thenReturn(Optional.of(
+                IOConnectorRequestEntity.builder().requestId(request.getRequestId()).retryStep(null).build()));
+        when(config.getSendRetryPolicy()).thenReturn(List.of(5, 10, 20, 40));
+        when(config.getSqsSendQueueName()).thenReturn("pn-io-connector-send-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder().queueUrl("https://sqs/send-queue").build());
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendWorker.class)) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.WARN, "step=", "delay=")).isTrue();
+            assertThat(logs.hasEvent(Level.WARN, "Ending process", "with errors=", "retry scheduled step=0 statusCode=429")).isTrue();
+        }
+    }
+
+    @Test
+    void sendMessage_nonRetryableError_logsWarnOnlyFailedToSend() {
+        MessageSendRequest request = buildRequest();
+        stubNonRetryableFailure(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendWorker.class)) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.WARN, "statusCode=404")).isTrue();
+            assertThat(logs.hasEvent(Level.ERROR, "Error while trying to send message to IO")).isFalse();
+        }
+    }
+
+    @Test
+    void publishPollingRequest_setsRecipientInternalIdFromTokenAndRecipientTaxIdFromDeanonymized() throws Exception {
+        MessageSendRequest request = buildRequest();
+        stubHappyPath(request);
+
+        sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(sqsClient).sendMessage(sqsCaptor.capture());
+        OutcomePollingRequest pollingRequest = objectMapper.readValue(
+                sqsCaptor.getValue().messageBody(), OutcomePollingRequest.class);
+        assertThat(pollingRequest.getRecipientInternalId()).isEqualTo(TOKEN_TAX_ID);
+        assertThat(pollingRequest.getRecipientTaxId()).isEqualTo(REAL_TAX_ID);
+    }
+
+    @Test
+    void publishPollingRequest_setsAwsTraceHeaderFromMdc() {
+        MessageSendRequest request = buildRequest();
+        stubHappyPath(request);
+
+        sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+        ArgumentCaptor<SendMessageRequest> sqsCaptor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(sqsClient).sendMessage(sqsCaptor.capture());
+        assertThat(sqsCaptor.getValue().messageSystemAttributes())
+                .containsKey(MessageSystemAttributeNameForSends.AWS_TRACE_HEADER);
+        assertThat(sqsCaptor.getValue().messageSystemAttributes()
+                .get(MessageSystemAttributeNameForSends.AWS_TRACE_HEADER).stringValue())
+                .isEqualTo(MdcTestSupport.XRAY_TRACE);
+    }
+
+    @Test
+    void publishPollingRequest_logsSqsInsertion() {
+        MessageSendRequest request = buildRequest();
+        stubHappyPath(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendWorker.class)) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.DEBUG, "Inserting data")).isTrue();
+            assertThat(logs.hasEvent(Level.INFO, "Inserted data in SQS pn-io-connector-polling-queue")).isTrue();
+        }
+    }
+
+    @Test
+    void process_neverLogsTaxIdInClear() {
+        MessageSendRequest request = buildRequest();
+        stubHappyPath(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.anyEventContains(REAL_TAX_ID)).isFalse();
+        }
+    }
+
+    @Test
+    void process_failedToSend_neverLogsTaxIdInClear() {
+        MessageSendRequest request = buildRequest();
+        stubNonRetryableFailure(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.anyEventContains(REAL_TAX_ID)).isFalse();
+            assertThat(logs.events()).allMatch(e -> e.getThrowableProxy() == null);
+        }
+    }
+
+    @Test
+    void process_failedToSend_logsExceptionClassAndStatusInsteadOfMessage() {
+        MessageSendRequest request = buildRequest();
+        stubNonRetryableFailure(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.WARN, "statusCode=404", "PnHttpResponseException")).isTrue();
+            assertThat(logs.hasEvent(Level.WARN, "Ending process", "with errors=", "PnHttpResponseException")).isTrue();
+        }
+    }
+
+    @Test
+    void sendMessage_retryableError_neverLogsTaxIdInClear() {
+        MessageSendRequest request = buildRequest();
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(new LimitedProfile().senderAllowed(true));
+        when(ioService.sendMessage(eq(request), eq("api-key"))).thenThrow(realisticIoException(502));
+        when(dao.findById(request.getRequestId())).thenReturn(Optional.of(
+                IOConnectorRequestEntity.builder().requestId(request.getRequestId()).retryStep(null).build()));
+        when(config.getSendRetryPolicy()).thenReturn(List.of(5, 10, 20, 40));
+        when(config.getSqsSendQueueName()).thenReturn("pn-io-connector-send-queue");
+        when(sqsClient.getQueueUrl(any(GetQueueUrlRequest.class)))
+                .thenReturn(GetQueueUrlResponse.builder().queueUrl("https://sqs/send-queue").build());
+
+        try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
+            sendWorker.process(buildMessageWithTrace(request), acknowledgement);
+
+            assertThat(logs.hasEvent(Level.WARN, "step=", "delay=", "502")).isTrue();
+            assertThat(logs.anyEventContains(REAL_TAX_ID)).isFalse();
+        }
+    }
+
+    @Test
+    void process_unexpectedException_neverLogsTaxIdInClear() {
+        MessageSendRequest request = buildRequest();
+        when(dataVaultService.deanonymize(TOKEN_TAX_ID)).thenReturn(REAL_TAX_ID);
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("api-key");
+        when(ioService.checkUserProfile(REAL_TAX_ID, "api-key")).thenReturn(new LimitedProfile().senderAllowed(true));
+        when(ioService.sendMessage(eq(request), eq("api-key")))
+                .thenThrow(new IllegalStateException("unexpected failure for " + REAL_TAX_ID));
+        Message<MessageSendRequest> message = buildMessageWithTrace(request);
+
+        try (LogEventCaptor logs = LogEventCaptor.attachToAllApplicationLoggers()) {
+            assertThatThrownBy(() -> sendWorker.process(message, acknowledgement))
+                    .isInstanceOf(IllegalStateException.class);
+
+            assertThat(logs.hasEvent(Level.WARN, "Ending process", "with errors=", "IllegalStateException")).isTrue();
+            assertThat(logs.anyEventContains(REAL_TAX_ID)).isFalse();
+            assertThat(logs.events()).allMatch(e -> e.getThrowableProxy() == null);
+        }
     }
 }

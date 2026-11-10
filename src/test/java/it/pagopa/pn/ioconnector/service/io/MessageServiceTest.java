@@ -26,10 +26,24 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
+import it.pagopa.pn.commons.utils.MDCUtils;
+import it.pagopa.pn.ioconnector.utils.LogEventCaptor;
+import it.pagopa.pn.ioconnector.utils.MdcTestSupport;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
+import org.mockito.invocation.Invocation;
+import org.slf4j.MDC;
+import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeNameForSends;
+import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -311,5 +325,131 @@ class MessageServiceTest {
             .senderServiceId("SVC-001")
             .subject("Test")
             .markdown("body");
+    }
+
+    @AfterEach
+    void cleanMdc() {
+        MDC.clear();
+    }
+
+    @Test
+    void handleSendRequest_setsMdcRequestIdIunCxId() {
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        when(requestDao.findByIdConsistentRead(any()))
+                .thenAnswer(MdcTestSupport.capturingInto(captured, Optional.<IOConnectorRequestEntity>empty()));
+
+        messageService.handleSendRequest("pn-delivery-push", buildRequest());
+
+        assertThat(captured.get())
+                .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-001")
+                .containsEntry(MDCUtils.MDC_PN_IUN_KEY, "IUN-001")
+                .containsEntry(MDCUtils.MDC_CX_ID_KEY, "ANON-TAX")
+                .doesNotContainKey("requestId");
+    }
+
+    @Test
+    void handleSendRequest_cleansAddedMdcKeys() {
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        when(requestDao.findByIdConsistentRead(any()))
+                .thenAnswer(MdcTestSupport.capturingInto(captured, Optional.<IOConnectorRequestEntity>empty()));
+
+        messageService.handleSendRequest("pn-delivery-push", buildRequest());
+
+        assertThat(captured.get()).containsKey(MDCUtils.MDC_PN_CTX_REQUEST_ID);
+        assertThat(MdcTestSupport.snapshot())
+                .doesNotContainKeys(MDCUtils.MDC_PN_CTX_REQUEST_ID, MDCUtils.MDC_PN_IUN_KEY,
+                        MDCUtils.MDC_CX_ID_KEY, "requestId");
+    }
+
+    @Test
+    void handleSendRequest_conflict_cleansAddedMdcKeys() {
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        IOConnectorRequestEntity existing = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .xPagopaIoConCxId("pn-delivery-push")
+                .iun("IUN-001")
+                .recipientTaxId("ANON-TAX")
+                .senderServiceId("SVC-001")
+                .subject("Different Subject")
+                .markdown("body")
+                .status("ACCEPTED")
+                .build();
+        when(requestDao.findByIdConsistentRead(any()))
+                .thenAnswer(MdcTestSupport.capturingInto(captured, Optional.of(existing)));
+
+        assertThatThrownBy(() -> messageService.handleSendRequest("pn-delivery-push", buildRequest()))
+                .isInstanceOf(PnRuntimeException.class);
+
+        assertThat(captured.get()).containsKey(MDCUtils.MDC_PN_CTX_REQUEST_ID);
+        assertThat(MdcTestSupport.snapshot())
+                .doesNotContainKeys(MDCUtils.MDC_PN_CTX_REQUEST_ID, MDCUtils.MDC_PN_IUN_KEY,
+                        MDCUtils.MDC_CX_ID_KEY, "requestId");
+    }
+
+    @Test
+    void handleSendRequest_keepsTraceIdFromFilter() {
+        MDC.put(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace");
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        when(requestDao.findByIdConsistentRead(any()))
+                .thenAnswer(MdcTestSupport.capturingInto(captured, Optional.<IOConnectorRequestEntity>empty()));
+
+        messageService.handleSendRequest("pn-delivery-push", buildRequest());
+
+        assertThat(captured.get())
+                .containsEntry(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace")
+                .containsKey(MDCUtils.MDC_PN_CTX_REQUEST_ID);
+        assertThat(MDC.get(MDCUtils.MDC_TRACE_ID_KEY)).isEqualTo("filter-trace");
+    }
+
+    @Test
+    void handleSendRequest_logsSqsInsertion() {
+        lenient().when(config.getSqsSendQueueName()).thenReturn("pn-io-connector-send-queue");
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(MessageService.class)) {
+            messageService.handleSendRequest("pn-delivery-push", buildRequest());
+
+            assertThat(logs.hasEvent(Level.DEBUG, "Inserting data")).isTrue();
+            assertThat(logs.hasEvent(Level.INFO, "Inserted data in SQS pn-io-connector-send-queue")).isTrue();
+        }
+    }
+
+    @Test
+    void handleSendRequest_setsAwsTraceHeader() {
+        MDC.put(MDCUtils.MDC_TRACE_ID_KEY, MdcTestSupport.XRAY_TRACE);
+
+        messageService.handleSendRequest("pn-delivery-push", buildRequest());
+
+        SendMessageRequest sent = lastSentRequest();
+        assertThat(sent.messageSystemAttributes())
+                .containsKey(MessageSystemAttributeNameForSends.AWS_TRACE_HEADER);
+        assertThat(sent.messageSystemAttributes().get(MessageSystemAttributeNameForSends.AWS_TRACE_HEADER).stringValue())
+                .isEqualTo(MdcTestSupport.XRAY_TRACE);
+    }
+
+    @Test
+    void handleSendRequest_startingProcessLogCarriesDomainMdc() {
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(MessageService.class)) {
+            messageService.handleSendRequest("pn-delivery-push", buildRequest());
+
+            assertThat(logs.mdcAt("Starting process"))
+                    .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-001")
+                    .containsEntry(MDCUtils.MDC_PN_IUN_KEY, "IUN-001")
+                    .containsEntry(MDCUtils.MDC_CX_ID_KEY, "ANON-TAX");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private SendMessageRequest lastSentRequest() {
+        Invocation invocation = mockingDetails(sqsClient).getInvocations().stream()
+                .filter(i -> i.getMethod().getName().equals("sendMessage"))
+                .reduce((first, second) -> second)
+                .orElseThrow(() -> new AssertionError("sendMessage not invoked"));
+        Object argument = invocation.getArgument(0);
+        if (argument instanceof SendMessageRequest request) {
+            return request;
+        }
+        SendMessageRequest.Builder builder = SendMessageRequest.builder();
+        ((Consumer<SendMessageRequest.Builder>) argument).accept(builder);
+        return builder.build();
     }
 }

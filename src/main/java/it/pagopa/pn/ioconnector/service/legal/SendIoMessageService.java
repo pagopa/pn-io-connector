@@ -1,6 +1,7 @@
 package it.pagopa.pn.ioconnector.service.legal;
 
 import it.pagopa.pn.commons.utils.LogUtils;
+import it.pagopa.pn.commons.utils.MDCUtils;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.exceptions.PnNotImplementedException;
@@ -13,6 +14,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.UserStatusRespon
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorOptInDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorOptInEntity;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOLegalClient;
+import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -20,8 +22,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.Map;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.MANAGE_OPT_IN;
+import static it.pagopa.pn.ioconnector.utils.LogUtils.describeError;
 
 @CustomLog
 @Service
@@ -62,27 +67,39 @@ public class SendIoMessageService {
      * @return SendMessageResponse
      */
     public SendMessageResponse manageOptIn(SendMessageRequest request) {
+        Map<String, String> mdcEntries = new HashMap<>();
+        mdcEntries.put(MDCUtils.MDC_PN_CTX_REQUEST_ID, request.getRequestId());
+        mdcEntries.put(MDCUtils.MDC_PN_IUN_KEY, request.getIun());
+        mdcEntries.put(MDCUtils.MDC_CX_ID_KEY, request.getRecipientInternalID());
+        Map<String, String> previousMdc = IoConnectorMDCUtils.addToContext(mdcEntries);
         log.logStartingProcess(MANAGE_OPT_IN);
+        try {
+            String hashedTaxId = DigestUtils.sha256Hex(request.getRecipientTaxID());
 
-        String hashedTaxId = DigestUtils.sha256Hex(request.getRecipientTaxID());
+            Instant lastSendDate = ioConnectorOptInDAO.get(hashedTaxId)
+                    .map(IOConnectorOptInEntity::getLastModified)
+                    .orElse(Instant.EPOCH);
 
-        Instant lastSendDate = ioConnectorOptInDAO.get(hashedTaxId)
-                .map(IOConnectorOptInEntity::getLastModified)
-                .orElse(Instant.EPOCH);
-
-        if (lastSendDate.isBefore(Instant.now().minus(config.getIoOptinMinDays(), ChronoUnit.DAYS))) {
-            log.info("Cooldown scaduto, opt-in inviabile a taxId={} iun={} lastModified={} requestId={}",
-                    LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), lastSendDate, request.getRequestId());
-            // TODO: implementare invio del messaggio di opt-in
-            log.logEndingProcess(MANAGE_OPT_IN);
-            return sendMessage(request);
-        } else {
-            log.info("Cooldown attivo, opt-in gi� inviato a taxId={} iun={} lastModified={} requestId={}",
-                    LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), lastSendDate, request.getRequestId());
-            SendMessageResponse res = new SendMessageResponse();
-            res.setResult(SendMessageResponse.ResultEnum.NOT_SENT_OPTIN_ALREADY_SENT);
-            log.logEndingProcess(MANAGE_OPT_IN);
-            return res;
+            if (lastSendDate.isBefore(Instant.now().minus(config.getIoOptinMinDays(), ChronoUnit.DAYS))) {
+                log.info("Cooldown scaduto, opt-in inviabile a taxId={} iun={} lastModified={} requestId={}",
+                        LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), lastSendDate, request.getRequestId());
+                // TODO: implementare invio del messaggio di opt-in
+                SendMessageResponse res = sendMessage(request);
+                log.logEndingProcess(MANAGE_OPT_IN);
+                return res;
+            } else {
+                log.info("Cooldown attivo, opt-in gi� inviato a taxId={} iun={} lastModified={} requestId={}",
+                        LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), lastSendDate, request.getRequestId());
+                SendMessageResponse res = new SendMessageResponse();
+                res.setResult(SendMessageResponse.ResultEnum.NOT_SENT_OPTIN_ALREADY_SENT);
+                log.logEndingProcess(MANAGE_OPT_IN);
+                return res;
+            }
+        } catch (RuntimeException e) {
+            log.logEndingProcess(MANAGE_OPT_IN, false, describeError(e), null);
+            throw e;
+        } finally {
+            IoConnectorMDCUtils.restoreContext(previousMdc);
         }
     }
 }

@@ -18,6 +18,7 @@ public class MessageSendRequest {
     private String requestId;
     private String xPagopaIoConCxId;
     private String iun;
+    @ToString.Exclude
     private String recipientTaxId;
     private String senderServiceId;
     @ToString.Exclude

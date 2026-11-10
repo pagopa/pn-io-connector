@@ -2,7 +2,7 @@ package it.pagopa.pn.ioconnector.middleware.db;
 
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Repository;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbIndex;
@@ -16,7 +16,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 @Repository
-@Slf4j
+@CustomLog
 public class IOConnectorRequestDaoImpl implements IOConnectorRequestDao {
 
     private final DynamoDbTable<IOConnectorRequestEntity> requestsTable;
@@ -30,13 +30,11 @@ public class IOConnectorRequestDaoImpl implements IOConnectorRequestDao {
 
     @Override
     public void save(IOConnectorRequestEntity entity) {
-        log.debug("save requestId={}", entity.getRequestId());
         requestsTable.putItem(entity);
     }
 
     @Override
     public Optional<IOConnectorRequestEntity> findById(String requestId) {
-        log.debug("findById requestId={}", requestId);
         Key key = Key.builder().partitionValue(requestId).build();
         return Optional.ofNullable(requestsTable.getItem(key));
     }
@@ -62,7 +60,6 @@ public class IOConnectorRequestDaoImpl implements IOConnectorRequestDao {
 
     @Override
     public IOConnectorRequestEntity update(IOConnectorRequestEntity entity) {
-        log.debug("update requestId={}", entity.getRequestId());
         entity.setUpdatedAt(Instant.now().toString());
         UpdateItemEnhancedRequest<IOConnectorRequestEntity> request =
                 UpdateItemEnhancedRequest.builder(IOConnectorRequestEntity.class)
