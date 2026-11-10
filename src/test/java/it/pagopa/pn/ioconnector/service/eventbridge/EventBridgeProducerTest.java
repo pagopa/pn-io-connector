@@ -17,6 +17,10 @@ import software.amazon.awssdk.services.eventbridge.EventBridgeClient;
 import software.amazon.awssdk.services.eventbridge.model.PutEventsRequest;
 import software.amazon.awssdk.services.eventbridge.model.PutEventsResponse;
 
+import ch.qos.logback.classic.Level;
+import it.pagopa.pn.ioconnector.utils.LogEventCaptor;
+import software.amazon.awssdk.services.eventbridge.model.PutEventsResultEntry;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -81,5 +85,91 @@ class EventBridgeProducerTest {
         String detail = captor.getValue().entries().get(0).detail();
         assertThat(detail).contains("FAILED_TO_SEND");
         assertThat(detail).contains("\"errorDetail\":\"404 - Not Found\"");
+    }
+
+    @Test
+    void publish_logsIoMessageId() {
+        when(config.getEventBridgeBusName()).thenReturn("pn-io-connector-bus");
+        when(eventBridgeClient.putEvents(any(PutEventsRequest.class)))
+                .thenReturn(PutEventsResponse.builder().failedEntryCount(0).build());
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(EventBridgeProducer.class)) {
+            eventBridgeProducer.publish(OutcomeEvent.builder()
+                    .requestId("REQ-001")
+                    .ioMessageId("IO-MSG-001")
+                    .eventType(EventType.SENT_TO_IO)
+                    .build());
+
+            assertThat(logs.anyMessageContains("IO-MSG-001")).isTrue();
+        }
+    }
+
+    @Test
+    void publish_successfulResponse_logsPublishedAndNoError() {
+        when(config.getEventBridgeBusName()).thenReturn("pn-io-connector-bus");
+        when(eventBridgeClient.putEvents(any(PutEventsRequest.class)))
+                .thenReturn(PutEventsResponse.builder()
+                        .failedEntryCount(0)
+                        .entries(PutEventsResultEntry.builder().eventId("evt-1").build())
+                        .build());
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(EventBridgeProducer.class)) {
+            eventBridgeProducer.publish(OutcomeEvent.builder()
+                    .requestId("REQ-001")
+                    .eventType(EventType.SENT_TO_IO)
+                    .build());
+
+            assertThat(logs.hasEvent(Level.INFO, "Published to EventBridge", "evt-1")).isTrue();
+            assertThat(logs.events()).noneMatch(e -> e.getLevel() == Level.ERROR);
+        }
+    }
+
+    @Test
+    void publish_failedEntry_logsErrorAndNoPublishedInfo() {
+        when(config.getEventBridgeBusName()).thenReturn("pn-io-connector-bus");
+        when(eventBridgeClient.putEvents(any(PutEventsRequest.class)))
+                .thenReturn(PutEventsResponse.builder()
+                        .failedEntryCount(1)
+                        .entries(PutEventsResultEntry.builder()
+                                .errorCode("InternalFailure")
+                                .errorMessage("The request processing has failed")
+                                .build())
+                        .build());
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(EventBridgeProducer.class)) {
+            eventBridgeProducer.publish(OutcomeEvent.builder()
+                    .requestId("REQ-001")
+                    .eventType(EventType.SENT_TO_IO)
+                    .build());
+
+            assertThat(logs.hasEvent(Level.ERROR, "Failed to publish to EventBridge",
+                    "errorCode=InternalFailure", "errorMessage=The request processing has failed",
+                    "requestId=REQ-001", "eventType=SENT_TO_IO")).isTrue();
+            assertThat(logs.anyMessageContains("Published to EventBridge")).isFalse();
+        }
+    }
+
+    @Test
+    void publish_entryWithErrorCodeAndZeroFailedCount_logsErrorAndNoPublishedInfo() {
+        when(config.getEventBridgeBusName()).thenReturn("pn-io-connector-bus");
+        when(eventBridgeClient.putEvents(any(PutEventsRequest.class)))
+                .thenReturn(PutEventsResponse.builder()
+                        .failedEntryCount(0)
+                        .entries(PutEventsResultEntry.builder()
+                                .errorCode("ThrottlingException")
+                                .errorMessage("Rate exceeded")
+                                .build())
+                        .build());
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(EventBridgeProducer.class)) {
+            eventBridgeProducer.publish(OutcomeEvent.builder()
+                    .requestId("REQ-001")
+                    .eventType(EventType.SENT_TO_IO)
+                    .build());
+
+            assertThat(logs.hasEvent(Level.ERROR, "Failed to publish to EventBridge",
+                    "errorCode=ThrottlingException", "errorMessage=Rate exceeded")).isTrue();
+            assertThat(logs.anyMessageContains("Published to EventBridge")).isFalse();
+        }
     }
 }

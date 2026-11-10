@@ -14,6 +14,7 @@ import it.pagopa.pn.ioconnector.middleware.msclient.common.BaseRestClient;
 import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 
 import java.util.UUID;
 
@@ -40,8 +41,8 @@ public class IOLegalClient extends BaseRestClient {
             log.warn(WHITELIST_BLOCK_LOG, "getProfileByPOST");
             throw new PnHttpResponseException("Recipient not in IO whitelist", 404);
         }
-        log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, "ioLegalApi.getProfileByPOST");
-        return invoke("getProfileByPOST", () -> ioLegalApi.getProfileByPOST(payload));
+        log.logInvokingExternalDownstreamService(PnLogger.EXTERNAL_SERVICES.IO, "ioLegalApi.getProfileByPOST");
+        return invoke("getProfileByPOST", true, () -> ioLegalApi.getProfileByPOST(payload));
     }
 
     public Activation getActivation(FiscalCodePayload payload) {
@@ -49,8 +50,8 @@ public class IOLegalClient extends BaseRestClient {
             log.warn(WHITELIST_BLOCK_LOG, "getServiceActivationByPOST");
             return simulatedInactiveActivation(payload.getFiscalCode());
         }
-        log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, "ioLegalApi.getServiceActivationByPOST");
-        return invoke("getServiceActivationByPOST", () -> ioLegalApi.getServiceActivationByPOST(payload));
+        log.logInvokingExternalDownstreamService(PnLogger.EXTERNAL_SERVICES.IO, "ioLegalApi.getServiceActivationByPOST");
+        return invoke("getServiceActivationByPOST", true, () -> ioLegalApi.getServiceActivationByPOST(payload));
     }
 
     public Activation upsertActivation(ActivationPayload payload) {
@@ -58,8 +59,8 @@ public class IOLegalClient extends BaseRestClient {
             log.warn(WHITELIST_BLOCK_LOG, "upsertServiceActivation");
             return simulatedInactiveActivation(payload.getFiscalCode());
         }
-        log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, "ioLegalApi.upsertServiceActivation");
-        return invoke("upsertServiceActivation", () -> ioLegalApi.upsertServiceActivation(payload));
+        log.logInvokingExternalDownstreamService(PnLogger.EXTERNAL_SERVICES.IO, "ioLegalApi.upsertServiceActivation");
+        return invoke("upsertServiceActivation", false, () -> ioLegalApi.upsertServiceActivation(payload));
     }
 
     public String sendCourtesyMessage(NewMessage message) {
@@ -75,8 +76,8 @@ public class IOLegalClient extends BaseRestClient {
             log.warn(WHITELIST_BLOCK_LOG, operation);
             return UUID.randomUUID().toString();
         }
-        log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.IO, operation);
-        return invoke(operation, () -> api.submitMessageforUserWithFiscalCodeInBody(message).getId());
+        log.logInvokingExternalDownstreamService(PnLogger.EXTERNAL_SERVICES.IO, operation);
+        return invoke(operation, false, () -> api.submitMessageforUserWithFiscalCodeInBody(message).getId());
     }
 
     private Activation simulatedInactiveActivation(String fiscalCode) {
@@ -88,7 +89,7 @@ public class IOLegalClient extends BaseRestClient {
     /**
      * Mappa gli errori HTTP di IO sui codici di errore del pn-io-connector
      */
-    private <T> T invoke(String operation, java.util.function.Supplier<T> call) {
+    private <T> T invoke(String operation, boolean notFoundIsExpected, java.util.function.Supplier<T> call) {
         try {
             return call.get();
         } catch (PnHttpResponseException ex) {
@@ -98,7 +99,16 @@ public class IOLegalClient extends BaseRestClient {
                 case 429 -> PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_RATE_LIMIT;
                 default -> PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_IO_SERVER_ERROR;
             };
-            log.warn("{} failed - status={} errorCode={}", operation, status, errorCode);
+            String description = String.format("%s failed - status=%d errorCode=%s", operation, status, errorCode);
+            if (status == 404 && notFoundIsExpected) {
+                log.logInvokationResultDownstreamNotFound(PnLogger.EXTERNAL_SERVICES.IO, description);
+            } else {
+                log.logInvokationResultDownstreamFailed(PnLogger.EXTERNAL_SERVICES.IO, description, null);
+            }
+            throw ex;
+        } catch (RestClientException ex) {
+            log.logInvokationResultDownstreamFailed(PnLogger.EXTERNAL_SERVICES.IO,
+                    operation + " failed - " + ex.getClass().getSimpleName(), null);
             throw ex;
         }
     }

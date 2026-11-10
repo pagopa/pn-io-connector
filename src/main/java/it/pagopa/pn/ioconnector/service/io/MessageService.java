@@ -6,17 +6,20 @@ import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.pagopa.pn.commons.utils.MDCUtils;
 import it.pagopa.pn.ioconnector.model.EventType;
+import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -43,8 +46,12 @@ public class MessageService {
     private final IOConnectorRequestDao requestDao;
 
     public Optional<MessageResponse> handleSendRequest(String cxId, MessageRequest request) {
+        Map<String, String> mdcEntries = new HashMap<>();
+        mdcEntries.put(MDCUtils.MDC_PN_CTX_REQUEST_ID, request.getRequestId());
+        mdcEntries.put(MDCUtils.MDC_PN_IUN_KEY, request.getIun());
+        mdcEntries.put(MDCUtils.MDC_CX_ID_KEY, request.getRecipientTaxId());
+        Map<String, String> previousMdc = IoConnectorMDCUtils.addToContext(mdcEntries);
         log.logStartingProcess(HANDLE_SEND_REQUEST);
-        MDC.put("requestId", request.getRequestId());
         try {
             Optional<IOConnectorRequestEntity> existing = requestDao.findByIdConsistentRead(request.getRequestId());
             if (existing.isPresent()) {
@@ -108,7 +115,9 @@ public class MessageService {
             String queueUrl = sqsClient.getQueueUrl(r -> r.queueName(config.getSqsSendQueueName())).queueUrl();
 
             requestDao.save(buildAcceptedEntity(cxId, sqsMsg, request));
-            sqsClient.sendMessage(r -> r.queueUrl(queueUrl).messageBody(messageBody));
+            log.debug("Inserting data {} in SQS {}", sqsMsg, config.getSqsSendQueueName());
+            sqsClient.sendMessage(r -> IoConnectorMDCUtils.withAwsTraceHeader(r.queueUrl(queueUrl).messageBody(messageBody)));
+            log.info("Inserted data in SQS {}", config.getSqsSendQueueName());
 
             log.logEndingProcess(HANDLE_SEND_REQUEST);
             return Optional.of(new MessageResponse()
@@ -119,7 +128,7 @@ public class MessageService {
             log.logEndingProcess(HANDLE_SEND_REQUEST, false, e.getMessage(), e);
             throw e;
         } finally {
-            MDC.remove("requestId");
+            IoConnectorMDCUtils.restoreContext(previousMdc);
         }
     }
 

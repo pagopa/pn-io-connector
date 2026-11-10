@@ -8,6 +8,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.msclient.datavault.v1.dto.Base
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 
 import java.util.Collections;
 import java.util.List;
@@ -23,12 +24,18 @@ public class DataVaultClient {
         if (internalId == null || internalId.isBlank()) {
             throw new PnDataVaultException(400, "internalId cannot be null or blank");
         }
-        log.logInvokingExternalService(PnLogger.EXTERNAL_SERVICES.PN_DATA_VAULT, "recipientsApi");
+        log.logInvokingExternalDownstreamService(PnLogger.EXTERNAL_SERVICES.PN_DATA_VAULT, "recipientsApi");
         List<String> internalIdParam = Collections.singletonList(internalId);
         try {
             return recipientsApi.getRecipientDenominationByInternalId(internalIdParam);
         } catch (PnHttpResponseException e) {
+            log.logInvokationResultDownstreamFailed(PnLogger.EXTERNAL_SERVICES.PN_DATA_VAULT,
+                    String.format("deanonymize failed - status=%d", e.getStatusCode()), null);
             throw new PnDataVaultException(e.getStatusCode(), e.getMessage());
+        } catch (RestClientException ex) {
+            log.logInvokationResultDownstreamFailed(PnLogger.EXTERNAL_SERVICES.PN_DATA_VAULT,
+                    "deanonymize failed - " + ex.getClass().getSimpleName(), null);
+            throw ex;
         }
     }
 }

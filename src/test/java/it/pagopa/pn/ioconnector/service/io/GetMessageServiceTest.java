@@ -13,6 +13,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 import java.util.Optional;
 
+import it.pagopa.pn.commons.utils.MDCUtils;
+import it.pagopa.pn.ioconnector.utils.LogEventCaptor;
+import it.pagopa.pn.ioconnector.utils.MdcTestSupport;
+import org.junit.jupiter.api.AfterEach;
+import org.slf4j.MDC;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -151,5 +161,89 @@ class GetMessageServiceTest {
 
         assertThrows(PnIoGetMessageNotFoundException.class,
                 () -> getMessageService.getMessageDetails("REQ-999", "FISCALCODE12345X"));
+    }
+
+    @AfterEach
+    void cleanMdc() {
+        MDC.clear();
+    }
+
+    @Test
+    void getMessageDetails_setsMdcRequestIdAndIun() {
+        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .iun("IUN-001")
+                .recipientTaxId("FISCALCODE12345X")
+                .subject("Oggetto")
+                .markdown("Testo")
+                .build();
+        AtomicReference<Map<String, String>> atEntry = new AtomicReference<>();
+        when(requestDao.findById("REQ-001"))
+                .thenAnswer(MdcTestSupport.capturingInto(atEntry, Optional.of(entity)));
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(GetMessageService.class)) {
+            getMessageService.getMessageDetails("REQ-001", "FISCALCODE12345X");
+
+            assertThat(atEntry.get())
+                    .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-001")
+                    .doesNotContainKey(MDCUtils.MDC_PN_IUN_KEY);
+            assertThat(logs.mdcAt("Ending process"))
+                    .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-001")
+                    .containsEntry(MDCUtils.MDC_PN_IUN_KEY, "IUN-001");
+        }
+    }
+
+    @Test
+    void getMessageDetails_notFound_setsOnlyRequestId() {
+        when(requestDao.findById("REQ-404")).thenReturn(Optional.empty());
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(GetMessageService.class)) {
+            assertThatThrownBy(() -> getMessageService.getMessageDetails("REQ-404", "FISCALCODE12345X"))
+                    .isInstanceOf(PnIoGetMessageNotFoundException.class);
+
+            assertThat(logs.mdcAt("Ending process"))
+                    .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-404")
+                    .doesNotContainKey(MDCUtils.MDC_PN_IUN_KEY);
+        }
+    }
+
+    @Test
+    void getMessageDetails_cleansAddedMdcKeys() {
+        MDC.put(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace");
+        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .iun("IUN-001")
+                .recipientTaxId("FISCALCODE12345X")
+                .subject("Oggetto")
+                .markdown("Testo")
+                .build();
+        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(entity));
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(GetMessageService.class)) {
+            getMessageService.getMessageDetails("REQ-001", "FISCALCODE12345X");
+
+            assertThat(logs.mdcAt("Ending process")).containsKey(MDCUtils.MDC_PN_CTX_REQUEST_ID);
+        }
+        assertThat(MdcTestSupport.snapshot())
+                .doesNotContainKeys(MDCUtils.MDC_PN_CTX_REQUEST_ID, MDCUtils.MDC_PN_IUN_KEY)
+                .containsEntry(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace");
+    }
+
+    @Test
+    void getMessageDetails_startingProcessLogCarriesRequestId() {
+        IOConnectorRequestEntity entity = IOConnectorRequestEntity.builder()
+                .requestId("REQ-001")
+                .iun("IUN-001")
+                .recipientTaxId("FISCALCODE12345X")
+                .subject("Oggetto")
+                .markdown("Testo")
+                .build();
+        when(requestDao.findById("REQ-001")).thenReturn(Optional.of(entity));
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(GetMessageService.class)) {
+            getMessageService.getMessageDetails("REQ-001", "FISCALCODE12345X");
+
+            assertThat(logs.mdcAt("Starting process")).containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-001");
+        }
     }
 }
