@@ -318,18 +318,18 @@ components:
           description: Id del servizio per il quale si invia una notifica.
           example: "000000000"
         subject:
-          format: password
-          x-field-extra-annotation: "@lombok.ToString.Exclude"
           type: string
           description: Oggetto del messaggio (max 120 caratteri).
           maxLength: 120
+          x-field-extra-annotation: "@lombok.ToString.Exclude" # NO EXTERNAL
+          format: password # NO EXTERNAL
         markdown:
-          format: password
-          x-field-extra-annotation: "@lombok.ToString.Exclude"
           type: string
           description: >
             Corpo del messaggio in formato Markdown. Puo contenere sezioni
             in lingue diverse concatenate nel medesimo campo.
+          x-field-extra-annotation: "@lombok.ToString.Exclude" # NO EXTERNAL
+          format: password # NO EXTERNAL
         attachments:
           type: array
           items:
@@ -450,9 +450,13 @@ components:
             subject:
               type: string
               description: Titolo del messaggio.
+              x-field-extra-annotation: "@lombok.ToString.Exclude" # NO EXTERNAL
+              format: password # NO EXTERNAL
             markdown:
               type: string
               description: Corpo del messaggio in formato markdown.
+              x-field-extra-annotation: "@lombok.ToString.Exclude" # NO EXTERNAL
+              format: password # NO EXTERNAL
         attachments:
           type: array
           items:

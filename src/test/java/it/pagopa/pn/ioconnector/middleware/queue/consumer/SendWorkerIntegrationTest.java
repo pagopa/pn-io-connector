@@ -18,9 +18,12 @@ import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Import;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
@@ -32,6 +35,7 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import io.awspring.cloud.sqs.operations.SqsTemplate;
 import it.pagopa.pn.commons.utils.MDCUtils;
@@ -56,8 +60,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest
+@SpringBootTest(properties = "logging.level.it.pagopa.pn=DEBUG")
 @Import(LocalStackTestConfig.class)
+@ExtendWith(OutputCaptureExtension.class)
 class SendWorkerIntegrationTest {
 
     @Autowired
@@ -342,6 +347,57 @@ class SendWorkerIntegrationTest {
         verify(eventBridgeProducer, never()).publish(any());
     }
 
+    @Test
+    void sentToIo_doesNotLogSubjectAndMarkdown(CapturedOutput output) throws Exception {
+        String subjectMarker = "SUBJ-MARKER-" + UUID.randomUUID();
+        String markdownMarker = "MD-MARKER-" + UUID.randomUUID();
+        MessageSendRequest request = buildRequest("INT-LOG-001", subjectMarker, markdownMarker);
+        dao.save(buildEntity("INT-LOG-001", null, subjectMarker, markdownMarker));
+
+        String receiptHandle = enqueueAndReceive(request);
+        Message<MessageSendRequest> message = buildMessage(request, receiptHandle);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(ioService.checkUserProfile(eq(request.getRecipientTaxId()), eq("test-api-key"))).thenReturn(buildAllowedProfile());
+        when(ioService.sendMessage(eq(request), eq("test-api-key"))).thenReturn("IO-MSG-LOG-001");
+
+        sendWorker.process(message, acknowledgement);
+
+        Optional<IOConnectorRequestEntity> updated = dao.findById("INT-LOG-001");
+        assertThat(updated).isPresent();
+        assertThat(updated.get().getStatus()).isEqualTo(EventType.SENT_TO_IO.name());
+        assertThat(updated.get().getMarkdown()).isEqualTo(markdownMarker);
+        assertThat(output.getAll())
+                .contains("Putting data in DynamoDb table", "Update data in DynamoDb table")
+                .doesNotContain(subjectMarker, markdownMarker);
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void longRetry_doesNotLogSubjectAndMarkdown(CapturedOutput output) throws Exception {
+        String subjectMarker = "SUBJ-MARKER-" + UUID.randomUUID();
+        String markdownMarker = "MD-MARKER-" + UUID.randomUUID();
+        MessageSendRequest request = buildRequest("INT-LOG-002", subjectMarker, markdownMarker);
+        dao.save(buildEntity("INT-LOG-002", null, subjectMarker, markdownMarker));
+
+        String receiptHandle = enqueueAndReceive(request);
+        Message<MessageSendRequest> message = buildMessage(request, receiptHandle);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(ioService.checkUserProfile(eq(request.getRecipientTaxId()), eq("test-api-key"))).thenReturn(buildAllowedProfile());
+        when(ioService.sendMessage(eq(request), eq("test-api-key")))
+                .thenThrow(new PnHttpResponseException("Service Unavailable", 503));
+
+        sendWorker.process(message, acknowledgement);
+
+        Optional<IOConnectorRequestEntity> updated = dao.findById("INT-LOG-002");
+        assertThat(updated).isPresent();
+        assertThat(updated.get().getRetryStep()).isEqualTo(1);
+        assertThat(output.getAll())
+                .contains("Get data in DynamoDb table", "Update data in DynamoDb table")
+                .doesNotContain(subjectMarker, markdownMarker);
+    }
+
     private static final String TRACE_HEADER = "Sqs_Msa_AWSTraceHeader";
 
     @AfterEach
@@ -451,26 +507,34 @@ class SendWorkerIntegrationTest {
     }
 
     private MessageSendRequest buildRequest(String requestId) {
+        return buildRequest(requestId, "Integration Test Subject", "Integration test body");
+    }
+
+    private MessageSendRequest buildRequest(String requestId, String subject, String markdown) {
         return MessageSendRequest.builder()
                 .requestId(requestId)
                 .xPagopaIoConCxId("pn-delivery-push")
                 .iun("IUN-INT-001")
                 .recipientTaxId("RSSMRA80A01H501U")
                 .senderServiceId("SVC-INT-001")
-                .subject("Integration Test Subject")
-                .markdown("Integration test body")
+                .subject(subject)
+                .markdown(markdown)
                 .pollingMaxDate(Instant.now().plusSeconds(3600))
                 .build();
     }
 
     private IOConnectorRequestEntity buildEntity(String requestId, Integer retryStep) {
+        return buildEntity(requestId, retryStep, "Integration Test Subject", "Integration test body");
+    }
+
+    private IOConnectorRequestEntity buildEntity(String requestId, Integer retryStep, String subject, String markdown) {
         return IOConnectorRequestEntity.builder()
                 .requestId(requestId)
                 .iun("IUN-INT-001")
                 .xPagopaIoConCxId("pn-delivery-push")
                 .senderServiceId("SVC-INT-001")
-                .subject("Integration Test Subject")
-                .markdown("Integration test body")
+                .subject(subject)
+                .markdown(markdown)
                 .status("ACCEPTED")
                 .retryStep(retryStep)
                 .createdAt(Instant.now().toString())
