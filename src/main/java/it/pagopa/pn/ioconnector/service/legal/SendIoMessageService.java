@@ -18,7 +18,6 @@ import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -79,11 +78,13 @@ public class SendIoMessageService {
         String requestId = StringUtils.hasText(request.getRequestId()) ? request.getRequestId() : UUID.randomUUID().toString();
         request.setRequestId(requestId);
 
-        MDC.put(MDCUtils.MDC_PN_IUN_KEY, request.getIun());
-        MDC.put(MDCUtils.MDC_CX_ID_KEY, request.getRecipientInternalID());
-        MDC.put(MDCUtils.MDC_PN_CTX_RECIPIENT_INDEX, String.valueOf(request.getRecipientIndex()));
-        MDC.put(MDCUtils.MDC_PN_CTX_REQUEST_ID, requestId);
-        MDC.put(MDCUtils.MDC_PN_CTX_TOPIC, MDC_TOPIC_SEND_IO_MESSAGE);
+        Map<String, String> mdcEntries = new HashMap<>();
+        mdcEntries.put(MDCUtils.MDC_PN_IUN_KEY, request.getIun());
+        mdcEntries.put(MDCUtils.MDC_CX_ID_KEY, request.getRecipientInternalID());
+        mdcEntries.put(MDCUtils.MDC_PN_CTX_RECIPIENT_INDEX, String.valueOf(request.getRecipientIndex()));
+        mdcEntries.put(MDCUtils.MDC_PN_CTX_REQUEST_ID, requestId);
+        mdcEntries.put(MDCUtils.MDC_PN_CTX_TOPIC, MDC_TOPIC_SEND_IO_MESSAGE);
+        Map<String, String> previousMdc = IoConnectorMDCUtils.addToContext(mdcEntries);
         try {
             log.logChecking(CHECK_IO_USER_STATUS);
             UserStatusInternal userStatus = getUserStatusInternal(request.getRecipientTaxID());
@@ -111,11 +112,7 @@ public class SendIoMessageService {
             response.setRequestId(requestId);
             return response;
         } finally {
-            MDC.remove(MDCUtils.MDC_PN_IUN_KEY);
-            MDC.remove(MDCUtils.MDC_CX_ID_KEY);
-            MDC.remove(MDCUtils.MDC_PN_CTX_RECIPIENT_INDEX);
-            MDC.remove(MDCUtils.MDC_PN_CTX_REQUEST_ID);
-            MDC.remove(MDCUtils.MDC_PN_CTX_TOPIC);
+            IoConnectorMDCUtils.restoreContext(previousMdc);
         }
     }
 

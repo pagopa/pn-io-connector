@@ -466,6 +466,43 @@ class SendIoMessageServiceTest {
         assertThat(MDC.get(MDCUtils.MDC_PN_IUN_KEY)).isNull();
     }
 
+    @Test
+    void sendMessage_restoresPreviousMdcAtEnd() {
+        MDC.put(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace");
+        MDC.put(MDCUtils.MDC_CX_ID_KEY, "header-cx-id");
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        when(ioLegalClient.getProfile(any(FiscalCodePayload.class)))
+                .thenAnswer(MdcTestSupport.capturingInto(captured, new LimitedProfile().senderAllowed(true)));
+        when(ioLegalMessageBuilder.buildCourtesyMessage(any(), anyBoolean())).thenReturn(new NewMessage());
+        when(ioLegalClient.sendCourtesyMessage(any())).thenReturn(IO_MESSAGE_ID);
+
+        sendIoMessageService.sendMessage(buildRequest().requestId("req-123"));
+
+        assertThat(captured.get()).containsEntry(MDCUtils.MDC_CX_ID_KEY, INTERNAL_ID);
+        assertThat(MdcTestSupport.snapshot())
+                .containsEntry(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace")
+                .containsEntry(MDCUtils.MDC_CX_ID_KEY, "header-cx-id")
+                .doesNotContainKeys(MDCUtils.MDC_PN_IUN_KEY, MDCUtils.MDC_PN_CTX_RECIPIENT_INDEX,
+                        MDCUtils.MDC_PN_CTX_REQUEST_ID, MDCUtils.MDC_PN_CTX_TOPIC);
+    }
+
+    @Test
+    void sendMessage_restoresPreviousMdcOnException() {
+        MDC.put(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace");
+        MDC.put(MDCUtils.MDC_CX_ID_KEY, "header-cx-id");
+        when(ioLegalClient.getProfile(any(FiscalCodePayload.class)))
+                .thenThrow(new IllegalStateException("connection reset"));
+        SendMessageRequest request = buildRequest().requestId("req-123");
+
+        assertThrows(IllegalStateException.class, () -> sendIoMessageService.sendMessage(request));
+
+        assertThat(MdcTestSupport.snapshot())
+                .containsEntry(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace")
+                .containsEntry(MDCUtils.MDC_CX_ID_KEY, "header-cx-id")
+                .doesNotContainKeys(MDCUtils.MDC_PN_IUN_KEY, MDCUtils.MDC_PN_CTX_RECIPIENT_INDEX,
+                        MDCUtils.MDC_PN_CTX_REQUEST_ID, MDCUtils.MDC_PN_CTX_TOPIC);
+    }
+
     // --- getUserStatus ---
 
     @Test
