@@ -18,9 +18,12 @@ import it.pagopa.pn.ioconnector.service.eventbridge.EventBridgeProducer;
 import it.pagopa.pn.ioconnector.service.io.IOService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Import;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
@@ -32,6 +35,21 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+
+import io.awspring.cloud.sqs.operations.SqsTemplate;
+import it.pagopa.pn.commons.utils.MDCUtils;
+import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
+import it.pagopa.pn.ioconnector.utils.MdcTestSupport;
+import org.junit.jupiter.api.AfterEach;
+import org.slf4j.MDC;
+import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeNameForSends;
+import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeValue;
+import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
+import java.time.Duration;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,8 +60,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest
+@SpringBootTest(properties = "logging.level.it.pagopa.pn=DEBUG")
 @Import(LocalStackTestConfig.class)
+@ExtendWith(OutputCaptureExtension.class)
 class SendWorkerIntegrationTest {
 
     @Autowired
@@ -61,6 +80,9 @@ class SendWorkerIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private SqsTemplate sqsTemplate;
+
     @MockitoBean
     private IOService ioService;
 
@@ -73,11 +95,14 @@ class SendWorkerIntegrationTest {
     private final Acknowledgement acknowledgement = mock(Acknowledgement.class);
 
     private String queueUrl;
+    private String pollingQueueUrl;
 
     @BeforeEach
     void setup() {
         queueUrl = sqsClient.getQueueUrl(r -> r.queueName(config.getSqsSendQueueName())).queueUrl();
         sqsClient.purgeQueue(r -> r.queueUrl(queueUrl));
+        pollingQueueUrl = sqsClient.getQueueUrl(r -> r.queueName(config.getSqsPollingQueueName())).queueUrl();
+        sqsClient.purgeQueue(r -> r.queueUrl(pollingQueueUrl));
         when(dataVaultService.deanonymize(anyString())).thenAnswer(i -> i.getArgument(0));
     }
 
@@ -322,6 +347,159 @@ class SendWorkerIntegrationTest {
         verify(eventBridgeProducer, never()).publish(any());
     }
 
+    @Test
+    void sentToIo_doesNotLogSubjectAndMarkdown(CapturedOutput output) throws Exception {
+        String subjectMarker = "SUBJ-MARKER-" + UUID.randomUUID();
+        String markdownMarker = "MD-MARKER-" + UUID.randomUUID();
+        MessageSendRequest request = buildRequest("INT-LOG-001", subjectMarker, markdownMarker);
+        dao.save(buildEntity("INT-LOG-001", null, subjectMarker, markdownMarker));
+
+        String receiptHandle = enqueueAndReceive(request);
+        Message<MessageSendRequest> message = buildMessage(request, receiptHandle);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(ioService.checkUserProfile(eq(request.getRecipientTaxId()), eq("test-api-key"))).thenReturn(buildAllowedProfile());
+        when(ioService.sendMessage(eq(request), eq("test-api-key"))).thenReturn("IO-MSG-LOG-001");
+
+        sendWorker.process(message, acknowledgement);
+
+        Optional<IOConnectorRequestEntity> updated = dao.findById("INT-LOG-001");
+        assertThat(updated).isPresent();
+        assertThat(updated.get().getStatus()).isEqualTo(EventType.SENT_TO_IO.name());
+        assertThat(updated.get().getMarkdown()).isEqualTo(markdownMarker);
+        assertThat(output.getAll())
+                .contains("Putting data in DynamoDb table", "Update data in DynamoDb table")
+                .doesNotContain(subjectMarker, markdownMarker);
+        verify(acknowledgement).acknowledge();
+    }
+
+    @Test
+    void longRetry_doesNotLogSubjectAndMarkdown(CapturedOutput output) throws Exception {
+        String subjectMarker = "SUBJ-MARKER-" + UUID.randomUUID();
+        String markdownMarker = "MD-MARKER-" + UUID.randomUUID();
+        MessageSendRequest request = buildRequest("INT-LOG-002", subjectMarker, markdownMarker);
+        dao.save(buildEntity("INT-LOG-002", null, subjectMarker, markdownMarker));
+
+        String receiptHandle = enqueueAndReceive(request);
+        Message<MessageSendRequest> message = buildMessage(request, receiptHandle);
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(ioService.checkUserProfile(eq(request.getRecipientTaxId()), eq("test-api-key"))).thenReturn(buildAllowedProfile());
+        when(ioService.sendMessage(eq(request), eq("test-api-key")))
+                .thenThrow(new PnHttpResponseException("Service Unavailable", 503));
+
+        sendWorker.process(message, acknowledgement);
+
+        Optional<IOConnectorRequestEntity> updated = dao.findById("INT-LOG-002");
+        assertThat(updated).isPresent();
+        assertThat(updated.get().getRetryStep()).isEqualTo(1);
+        assertThat(output.getAll())
+                .contains("Get data in DynamoDb table", "Update data in DynamoDb table")
+                .doesNotContain(subjectMarker, markdownMarker);
+    }
+
+    private static final String TRACE_HEADER = "Sqs_Msa_AWSTraceHeader";
+
+    @AfterEach
+    void cleanMdc() {
+        MDC.clear();
+    }
+
+    private SendMessageResponse sendWithTrace(String targetQueueUrl, MessageSendRequest request, String trace) throws Exception {
+        return sqsClient.sendMessage(SendMessageRequest.builder()
+                .queueUrl(targetQueueUrl)
+                .messageBody(objectMapper.writeValueAsString(request))
+                .messageSystemAttributes(Map.of(MessageSystemAttributeNameForSends.AWS_TRACE_HEADER,
+                        MessageSystemAttributeValue.builder().dataType("String").stringValue(trace).build()))
+                .build());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Message<MessageSendRequest> receiveFromSendQueue() {
+        Optional<Message<MessageSendRequest>> received = sqsTemplate.receive(
+                from -> from.queue(config.getSqsSendQueueName()).pollTimeout(Duration.ofSeconds(5)),
+                MessageSendRequest.class);
+        assertThat(received).isPresent();
+        return received.get();
+    }
+
+    private Message<?> receiveFromPollingQueue() {
+        Optional<Message<?>> received = sqsTemplate.receive(
+                from -> from.queue(config.getSqsPollingQueueName()).pollTimeout(Duration.ofSeconds(5)));
+        assertThat(received).isPresent();
+        return received.get();
+    }
+
+    @Test
+    void process_realSqsMessage_setsMdcFromHeaders() throws Exception {
+        MessageSendRequest request = buildRequest("INT-MDC-001");
+        dao.save(buildEntity("INT-MDC-001", 0));
+        SendMessageResponse sent = sendWithTrace(queueUrl, request, MdcTestSupport.XRAY_TRACE);
+        Message<MessageSendRequest> message = receiveFromSendQueue();
+
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(dataVaultService.deanonymize(anyString())).thenAnswer(invocation -> {
+            captured.set(MdcTestSupport.snapshot());
+            return invocation.getArgument(0);
+        });
+        when(ioService.checkUserProfile(anyString(), eq("test-api-key"))).thenReturn(buildNotAllowedProfile());
+
+        sendWorker.process(message, acknowledgement);
+
+        assertThat(message.getHeaders()).containsKey(TRACE_HEADER);
+        assertThat(captured.get())
+                .containsEntry(MDCUtils.MDC_TRACE_ID_KEY, MdcTestSupport.XRAY_TRACE)
+                .containsEntry(MDCUtils.MDC_PN_CTX_MESSAGE_ID, sent.messageId())
+                .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "INT-MDC-001")
+                .containsEntry(MDCUtils.MDC_PN_IUN_KEY, "IUN-INT-001")
+                .containsEntry(MDCUtils.MDC_CX_ID_KEY, "RSSMRA80A01H501U");
+        assertThat(message.getHeaders().getId()).hasToString(sent.messageId());
+    }
+
+    @Test
+    void publishPollingRequest_realSqs_messageHasAwsTraceHeader() throws Exception {
+        MessageSendRequest request = buildRequest("INT-MDC-002");
+        dao.save(buildEntity("INT-MDC-002", 0));
+        sendWithTrace(queueUrl, request, MdcTestSupport.XRAY_TRACE);
+        Message<MessageSendRequest> message = receiveFromSendQueue();
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(ioService.checkUserProfile(anyString(), eq("test-api-key"))).thenReturn(buildAllowedProfile());
+        when(ioService.sendMessage(any(), eq("test-api-key"))).thenReturn("IO-MSG-INT-002");
+
+        sendWorker.process(message, acknowledgement);
+
+        Message<?> polling = receiveFromPollingQueue();
+        assertThat(polling.getHeaders()).containsEntry(TRACE_HEADER, MdcTestSupport.XRAY_TRACE);
+    }
+
+    @Test
+    void publishPollingRequest_realSqs_nonXrayTrace_omitsAwsTraceHeader() {
+        MessageSendRequest request = buildRequest("INT-MDC-003");
+        dao.save(buildEntity("INT-MDC-003", 0));
+        Message<MessageSendRequest> message = MessageBuilder.withPayload(request)
+                .setHeader("Sqs_ReceiptHandle", "test-receipt-handle")
+                .setHeader(TRACE_HEADER, "trace_id:" + UUID.randomUUID())
+                .build();
+
+        when(ioService.getServiceUseKey(request.getSenderServiceId())).thenReturn("test-api-key");
+        when(ioService.checkUserProfile(anyString(), eq("test-api-key"))).thenReturn(buildAllowedProfile());
+        when(ioService.sendMessage(any(), eq("test-api-key"))).thenReturn("IO-MSG-INT-003");
+
+        sendWorker.process(message, acknowledgement);
+
+        verify(acknowledgement).acknowledge();
+        Message<?> polling = receiveFromPollingQueue();
+        assertThat(polling.getHeaders()).doesNotContainKey(TRACE_HEADER);
+    }
+
+    private LimitedProfile buildNotAllowedProfile() {
+        LimitedProfile profile = new LimitedProfile();
+        profile.setSenderAllowed(false);
+        return profile;
+    }
+
     private LimitedProfile buildAllowedProfile() {
         LimitedProfile profile = new LimitedProfile();
         profile.setSenderAllowed(true);
@@ -329,26 +507,34 @@ class SendWorkerIntegrationTest {
     }
 
     private MessageSendRequest buildRequest(String requestId) {
+        return buildRequest(requestId, "Integration Test Subject", "Integration test body");
+    }
+
+    private MessageSendRequest buildRequest(String requestId, String subject, String markdown) {
         return MessageSendRequest.builder()
                 .requestId(requestId)
                 .xPagopaIoConCxId("pn-delivery-push")
                 .iun("IUN-INT-001")
                 .recipientTaxId("RSSMRA80A01H501U")
                 .senderServiceId("SVC-INT-001")
-                .subject("Integration Test Subject")
-                .markdown("Integration test body")
+                .subject(subject)
+                .markdown(markdown)
                 .pollingMaxDate(Instant.now().plusSeconds(3600))
                 .build();
     }
 
     private IOConnectorRequestEntity buildEntity(String requestId, Integer retryStep) {
+        return buildEntity(requestId, retryStep, "Integration Test Subject", "Integration test body");
+    }
+
+    private IOConnectorRequestEntity buildEntity(String requestId, Integer retryStep, String subject, String markdown) {
         return IOConnectorRequestEntity.builder()
                 .requestId(requestId)
                 .iun("IUN-INT-001")
                 .xPagopaIoConCxId("pn-delivery-push")
                 .senderServiceId("SVC-INT-001")
-                .subject("Integration Test Subject")
-                .markdown("Integration test body")
+                .subject(subject)
+                .markdown(markdown)
                 .status("ACCEPTED")
                 .retryStep(retryStep)
                 .createdAt(Instant.now().toString())

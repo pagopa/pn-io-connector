@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.eventbridge.EventBridgeClient;
 import software.amazon.awssdk.services.eventbridge.model.PutEventsRequest;
 import software.amazon.awssdk.services.eventbridge.model.PutEventsRequestEntry;
+import software.amazon.awssdk.services.eventbridge.model.PutEventsResponse;
+import software.amazon.awssdk.services.eventbridge.model.PutEventsResultEntry;
 
 import java.time.Instant;
 
@@ -48,6 +50,20 @@ public class EventBridgeProducer {
         log.info("Publishing to EventBridge bus={} source={} detailType={} requestId={} eventType={}",
                 entry.eventBusName(), entry.source(), entry.detailType(),
                 event.getRequestId(), event.getEventType());
-        eventBridgeClient.putEvents(putEventsRequest);
+        PutEventsResponse response = eventBridgeClient.putEvents(putEventsRequest);
+        PutEventsResultEntry resultEntry = response != null && response.hasEntries() && !response.entries().isEmpty()
+                ? response.entries().get(0)
+                : null;
+        boolean failedEntries = response != null && response.failedEntryCount() != null && response.failedEntryCount() > 0;
+        if (failedEntries || (resultEntry != null && resultEntry.errorCode() != null)) {
+            log.error("Failed to publish to EventBridge errorCode={} errorMessage={} requestId={} eventType={}",
+                    resultEntry != null ? resultEntry.errorCode() : null,
+                    resultEntry != null ? resultEntry.errorMessage() : null,
+                    event.getRequestId(), event.getEventType());
+            return;
+        }
+        String eventId = resultEntry != null ? resultEntry.eventId() : null;
+        log.info("Published to EventBridge eventId={} requestId={} ioMessageId={} eventType={}",
+                eventId, event.getRequestId(), event.getIoMessageId(), event.getEventType());
     }
 }

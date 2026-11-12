@@ -1,12 +1,16 @@
 package it.pagopa.pn.ioconnector.service.io;
 
+import it.pagopa.pn.commons.utils.MDCUtils;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.LimitedProfile;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetProfileRequest;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.GetProfileResponse;
 import it.pagopa.pn.ioconnector.service.DataVaultService;
+import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.GET_IO_PROFILE;
 
@@ -19,6 +23,7 @@ public class ProfileService {
     private final DataVaultService dataVaultService;
 
     public GetProfileResponse getProfile(GetProfileRequest request) {
+        Map<String, String> previousMdc = IoConnectorMDCUtils.addToContext(MDCUtils.MDC_CX_ID_KEY, request.getRecipientTaxId());
         log.logStartingProcess(GET_IO_PROFILE);
         try {
             String apiKeyUse = ioService.getServiceUseKey(request.getSenderServiceId());
@@ -36,6 +41,8 @@ public class ProfileService {
         } catch (Exception e) {
             log.logEndingProcess(GET_IO_PROFILE, false, e.getMessage(), e);
             throw e;
+        } finally {
+            IoConnectorMDCUtils.restoreContext(previousMdc);
         }
     }
 

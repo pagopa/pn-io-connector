@@ -9,19 +9,24 @@ import it.pagopa.pn.ioconnector.middleware.db.IOConnectorRequestDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorRequestEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Import;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SpringBootTest
+@SpringBootTest(properties = "logging.level.it.pagopa.pn=DEBUG")
 @Import(LocalStackTestConfig.class)
+@ExtendWith(OutputCaptureExtension.class)
 class MessageServiceIntegrationTest {
 
     @Autowired
@@ -78,6 +83,29 @@ class MessageServiceIntegrationTest {
 
         assertThat(received.messages()).isNotEmpty();
         assertThat(received.messages().get(0).body()).contains("INT-REQ-001");
+    }
+
+    @Test
+    void handleSendRequest_doesNotLogSubjectAndMarkdown(CapturedOutput output) {
+        String subjectMarker = "SUBJ-MARKER-" + UUID.randomUUID();
+        String markdownMarker = "MD-MARKER-" + UUID.randomUUID();
+        MessageRequest request = new MessageRequest()
+                .requestId("INT-REQ-LOG-001")
+                .iun("IUN-LOG-001")
+                .recipientTaxId("ANON-TAX-LOG")
+                .senderServiceId("SVC-INT-001")
+                .subject(subjectMarker)
+                .markdown(markdownMarker)
+                .pollingMaxMins(1440);
+
+        messageService.handleSendRequest("pn-delivery-push", request);
+        Optional<IOConnectorRequestEntity> saved = requestDao.findById("INT-REQ-LOG-001");
+
+        assertThat(saved).isPresent();
+        assertThat(saved.get().getMarkdown()).isEqualTo(markdownMarker);
+        assertThat(output.getAll())
+                .contains("Putting data in DynamoDb table", "Get data in DynamoDb table")
+                .doesNotContain(subjectMarker, markdownMarker);
     }
 
     @Test

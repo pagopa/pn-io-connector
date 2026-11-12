@@ -14,6 +14,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.UserStatusRespon
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorOptInDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorOptInEntity;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOLegalClient;
+import it.pagopa.pn.ioconnector.utils.IoConnectorMDCUtils;
 import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -24,13 +25,16 @@ import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static it.pagopa.pn.ioconnector.utils.LogUtils.CHECK_ENABLE_IO_ACTIVATION_MESSAGE;
 import static it.pagopa.pn.ioconnector.utils.LogUtils.CHECK_ENABLE_IO_MESSAGE;
 import static it.pagopa.pn.ioconnector.utils.LogUtils.CHECK_IO_USER_STATUS;
 import static it.pagopa.pn.ioconnector.utils.LogUtils.MANAGE_OPT_IN;
+import static it.pagopa.pn.ioconnector.utils.LogUtils.describeError;
 
 @CustomLog
 @Service
@@ -150,33 +154,44 @@ public class SendIoMessageService {
      * @return SendMessageResponse
      */
     SendMessageResponse manageOptIn(SendMessageRequest request) {
+        Map<String, String> mdcEntries = new HashMap<>();
+        mdcEntries.put(MDCUtils.MDC_PN_CTX_REQUEST_ID, request.getRequestId());
+        mdcEntries.put(MDCUtils.MDC_PN_IUN_KEY, request.getIun());
+        mdcEntries.put(MDCUtils.MDC_CX_ID_KEY, request.getRecipientInternalID());
+        Map<String, String> previousMdc = IoConnectorMDCUtils.addToContext(mdcEntries);
         log.logStartingProcess(MANAGE_OPT_IN);
+        try {
+            String hashedTaxId = DigestUtils.sha256Hex(request.getRecipientTaxID());
 
-        String hashedTaxId = DigestUtils.sha256Hex(request.getRecipientTaxID());
+            Instant lastSendDate = ioConnectorOptInDAO.get(hashedTaxId)
+                    .map(IOConnectorOptInEntity::getLastModified)
+                    .orElse(Instant.EPOCH);
 
-        Instant lastSendDate = ioConnectorOptInDAO.get(hashedTaxId)
-                .map(IOConnectorOptInEntity::getLastModified)
-                .orElse(Instant.EPOCH);
-
-        if (lastSendDate.isBefore(Instant.now().minus(config.getIoOptinMinDays(), ChronoUnit.DAYS))) {
-            log.info("Cooldown scaduto, opt-in inviabile a taxId={} iun={} lastModified={} requestId={}",
-                    LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), lastSendDate, request.getRequestId());
-            SendMessageResponse res = sendOptInMessage(request);
-            if (res.getResult() == SendMessageResponse.ResultEnum.SENT_OPTIN) {
-                ioConnectorOptInDAO.save(IOConnectorOptInEntity.of(hashedTaxId, config.getIoOptinMinDays()));
+            if (lastSendDate.isBefore(Instant.now().minus(config.getIoOptinMinDays(), ChronoUnit.DAYS))) {
+                log.info("Cooldown scaduto, opt-in inviabile a taxId={} iun={} lastModified={} requestId={}",
+                        LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), lastSendDate, request.getRequestId());
+                SendMessageResponse res = sendOptInMessage(request);
+                if (res.getResult() == SendMessageResponse.ResultEnum.SENT_OPTIN) {
+                    ioConnectorOptInDAO.save(IOConnectorOptInEntity.of(hashedTaxId, config.getIoOptinMinDays()));
+                } else {
+                    log.info("Opt-in non inviato, cooldown non registrato result={} taxId={} iun={} requestId={}",
+                            res.getResult(), LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), request.getRequestId());
+                }
+                log.logEndingProcess(MANAGE_OPT_IN);
+                return res;
             } else {
-                log.info("Opt-in non inviato, cooldown non registrato result={} taxId={} iun={} requestId={}",
-                        res.getResult(), LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), request.getRequestId());
+                log.info("Cooldown attivo, opt-in già inviato a taxId={} iun={} lastModified={} requestId={}",
+                        LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), lastSendDate, request.getRequestId());
+                SendMessageResponse res = new SendMessageResponse();
+                res.setResult(SendMessageResponse.ResultEnum.NOT_SENT_OPTIN_ALREADY_SENT);
+                log.logEndingProcess(MANAGE_OPT_IN);
+                return res;
             }
-            log.logEndingProcess(MANAGE_OPT_IN);
-            return res;
-        } else {
-            log.info("Cooldown attivo, opt-in già inviato a taxId={} iun={} lastModified={} requestId={}",
-                    LogUtils.maskTaxId(request.getRecipientTaxID()), request.getIun(), lastSendDate, request.getRequestId());
-            SendMessageResponse res = new SendMessageResponse();
-            res.setResult(SendMessageResponse.ResultEnum.NOT_SENT_OPTIN_ALREADY_SENT);
-            log.logEndingProcess(MANAGE_OPT_IN);
-            return res;
+        } catch (RuntimeException e) {
+            log.logEndingProcess(MANAGE_OPT_IN, false, describeError(e), null);
+            throw e;
+        } finally {
+            IoConnectorMDCUtils.restoreContext(previousMdc);
         }
     }
 

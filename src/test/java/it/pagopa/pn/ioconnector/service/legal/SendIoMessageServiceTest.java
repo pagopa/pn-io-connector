@@ -13,6 +13,11 @@ import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.UserStatusRespon
 import it.pagopa.pn.ioconnector.middleware.db.IOConnectorOptInDao;
 import it.pagopa.pn.ioconnector.middleware.db.entities.IOConnectorOptInEntity;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOLegalClient;
+import it.pagopa.pn.commons.utils.MDCUtils;
+import it.pagopa.pn.ioconnector.utils.LogEventCaptor;
+import it.pagopa.pn.ioconnector.utils.MdcTestSupport;
+import ch.qos.logback.classic.Level;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,9 +38,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.*;
@@ -66,6 +73,11 @@ class SendIoMessageServiceTest {
     private PnIoConnectorConfig config;
 
     private SendIoMessageService sendIoMessageService;
+
+    @AfterEach
+    void cleanMdc() {
+        MDC.clear();
+    }
 
     @BeforeEach
     void setUp() {
@@ -569,5 +581,109 @@ class SendIoMessageServiceTest {
     @MethodSource("preferredLanguages")
     void isPreferredLanguageIT(List<String> preferredLanguages, boolean expected) {
         assertThat(SendIoMessageService.isPreferredLanguageIT(preferredLanguages)).isEqualTo(expected);
+    }
+
+    @Test
+    void manageOptIn_setsMdcRequestIdIunAndInternalIdNotTaxId() {
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        when(ioConnectorOptInDAO.get(anyString()))
+                .thenAnswer(MdcTestSupport.capturingInto(captured, Optional.<IOConnectorOptInEntity>empty()));
+        givenOptInMessageSent();
+        SendMessageRequest request = buildRequest().requestId("REQ-001");
+
+        sendIoMessageService.manageOptIn(request);
+
+        assertThat(captured.get())
+                .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-001")
+                .containsEntry(MDCUtils.MDC_PN_IUN_KEY, "IUN-001")
+                .containsEntry(MDCUtils.MDC_CX_ID_KEY, "internal-id-001");
+        assertThat(captured.get().values()).doesNotContain(TAX_ID);
+    }
+
+    @Test
+    void manageOptIn_startingProcessLogCarriesDomainMdc() {
+        when(ioConnectorOptInDAO.get(anyString())).thenReturn(Optional.empty());
+        givenOptInMessageSent();
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendIoMessageService.class)) {
+            sendIoMessageService.manageOptIn(buildRequest().requestId("REQ-001"));
+
+            assertThat(logs.mdcAt("Starting process"))
+                    .containsEntry(MDCUtils.MDC_PN_CTX_REQUEST_ID, "REQ-001")
+                    .containsEntry(MDCUtils.MDC_PN_IUN_KEY, "IUN-001")
+                    .containsEntry(MDCUtils.MDC_CX_ID_KEY, "internal-id-001");
+        }
+    }
+
+    @Test
+    void manageOptIn_restoresMdcAtEnd() {
+        MDC.put(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace");
+        MDC.put(MDCUtils.MDC_CX_ID_KEY, "header-cx-id");
+        when(ioConnectorOptInDAO.get(anyString())).thenReturn(Optional.empty());
+        givenOptInMessageSent();
+
+        sendIoMessageService.manageOptIn(buildRequest().requestId("REQ-001"));
+
+        assertThat(MdcTestSupport.snapshot())
+                .containsEntry(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace")
+                .containsEntry(MDCUtils.MDC_CX_ID_KEY, "header-cx-id")
+                .doesNotContainKeys(MDCUtils.MDC_PN_CTX_REQUEST_ID, MDCUtils.MDC_PN_IUN_KEY);
+    }
+
+    @Test
+    void manageOptIn_restoresMdcOnException() {
+        MDC.put(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace");
+        when(ioConnectorOptInDAO.get(anyString())).thenThrow(new IllegalStateException("dao down"));
+        SendMessageRequest request = buildRequest().requestId("REQ-001");
+
+        assertThatThrownBy(() -> sendIoMessageService.manageOptIn(request)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(MdcTestSupport.snapshot())
+                .containsEntry(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace")
+                .doesNotContainKeys(MDCUtils.MDC_PN_CTX_REQUEST_ID, MDCUtils.MDC_PN_IUN_KEY, MDCUtils.MDC_CX_ID_KEY);
+    }
+
+    @Test
+    void manageOptIn_daoError_logsEndingProcessWithErrorsAndRethrows() {
+        IllegalStateException failure = new IllegalStateException("dao down");
+        when(ioConnectorOptInDAO.get(anyString())).thenThrow(failure);
+        SendMessageRequest request = buildRequest().requestId("REQ-001");
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendIoMessageService.class)) {
+            assertThatThrownBy(() -> sendIoMessageService.manageOptIn(request)).isSameAs(failure);
+
+            assertThat(logs.hasEvent(Level.WARN, "Ending process manageOptIn with errors=", "IllegalStateException")).isTrue();
+        }
+    }
+
+    @Test
+    void manageOptIn_cooldownExpiredAndSaveThrows_logsSingleEndingProcessWithErrors() {
+        when(ioConnectorOptInDAO.get(anyString())).thenReturn(Optional.empty());
+        givenOptInMessageSent();
+        doThrow(new IllegalStateException("dao down")).when(ioConnectorOptInDAO).save(any());
+        SendMessageRequest request = buildRequest().requestId("REQ-001");
+
+        try (LogEventCaptor logs = LogEventCaptor.attachTo(SendIoMessageService.class)) {
+            assertThatThrownBy(() -> sendIoMessageService.manageOptIn(request))
+                    .isInstanceOf(IllegalStateException.class);
+
+            assertThat(logs.countEvents(Level.INFO, "Ending process manageOptIn")).isZero();
+            assertThat(logs.countEvents(Level.WARN, "Ending process manageOptIn with errors=")).isEqualTo(1);
+            assertThat(logs.events().stream().filter(e -> e.getFormattedMessage().contains("Ending process manageOptIn"))).hasSize(1);
+        }
+    }
+
+    @Test
+    void getUserStatus_neverPutsTaxIdInMdcAndKeepsContext() {
+        MDC.put(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace");
+        AtomicReference<Map<String, String>> captured = new AtomicReference<>();
+        when(ioLegalClient.getProfile(any(FiscalCodePayload.class)))
+                .thenAnswer(MdcTestSupport.capturingInto(captured, new LimitedProfile().senderAllowed(true)));
+
+        sendIoMessageService.getUserStatus(new UserStatusRequest(TAX_ID));
+
+        assertThat(captured.get()).containsEntry(MDCUtils.MDC_TRACE_ID_KEY, "filter-trace");
+        assertThat(captured.get().values()).doesNotContain(TAX_ID);
+        assertThat(MdcTestSupport.snapshot()).containsOnlyKeys(MDCUtils.MDC_TRACE_ID_KEY);
     }
 }

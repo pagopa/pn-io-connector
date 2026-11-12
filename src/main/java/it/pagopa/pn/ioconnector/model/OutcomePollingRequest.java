@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.time.Instant;
 
@@ -16,7 +17,9 @@ public class OutcomePollingRequest {
     private String requestId;
     private String xPagopaIoConCxId;
     private String iun;
+    @ToString.Exclude
     private String recipientTaxId;
+    private String recipientInternalId;
     private String ioMessageId;
     private String senderServiceId;
     private boolean paymentData;

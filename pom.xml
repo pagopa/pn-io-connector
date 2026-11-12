@@ -8,7 +8,7 @@
         <relativePath/>
     </parent>
 	<artifactId>pn-io-connector</artifactId>
-	<version>1.2.0-SNAPSHOT</version>
+	<version>1.3.0-SNAPSHOT</version>
 	<name>pn-io-connector</name>
 	<description>Connector between SEND and app IO backend</description>
     <scm>
@@ -164,7 +164,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>https://raw.githubusercontent.com/pagopa/io-functions-services/6b101a2e303fc5e571669ddaabbeb5c90bf017d3/openapi/index.yaml</inputSpec>
+                            <inputSpec>${project.basedir}/docs/wsclient/io/io-functions-services.yaml</inputSpec>
                             <generatorName>java</generatorName>
                             <library>restclient</library>
                             <generateApiDocumentation>false</generateApiDocumentation>
@@ -196,7 +196,7 @@
                         </goals>
                         <phase>generate-resources</phase>
                         <configuration>
-                            <inputSpec>https://raw.githubusercontent.com/pagopa/pn-data-vault/8086e30e29056c08c6ae9cb8612e4462dc2ae1ad/docs/openapi/pn-datavault-api-v1.yaml</inputSpec>
+                            <inputSpec>${project.basedir}/docs/wsclient/datavault/pn-datavault-api-v1.yaml</inputSpec>
                             <generatorName>java</generatorName>
                             <library>restclient</library>
                             <generateApiDocumentation>false</generateApiDocumentation>
