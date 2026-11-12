@@ -100,7 +100,17 @@ paths:
           schema:
             type: string
           description: Identificativo Univoco Notifica su SEND.
-        - $ref: '#/components/parameters/cxIdAuthFleet'
+        - $ref: '#/components/parameters/cxIdAuthFleet'                   # NO EXTERNAL
+#        - $ref: '#/components/parameters/cxTaxId'                       # ONLY EXTERNAL
+#        - $ref: '#/components/parameters/lollipopOriginalMethod'        # ONLY EXTERNAL
+#        - $ref: '#/components/parameters/lollipopOriginalUrl'           # ONLY EXTERNAL
+#        - $ref: '#/components/parameters/lollipopPublicKey'             # ONLY EXTERNAL
+#        - $ref: '#/components/parameters/lollipopAssertionRef'          # ONLY EXTERNAL
+#        - $ref: '#/components/parameters/lollipopAssertionType'         # ONLY EXTERNAL
+#        - $ref: '#/components/parameters/lollipopAuthJwt'               # ONLY EXTERNAL
+#        - $ref: '#/components/parameters/lollipopUserId'                # ONLY EXTERNAL
+#        - $ref: '#/components/parameters/lollipopSignatureInput'        # ONLY EXTERNAL
+#        - $ref: '#/components/parameters/lollipopSignature'             # ONLY EXTERNAL
       responses:
         '200':
           description: Contenuto del bottom sheet di pre-apertura notifica.
@@ -125,13 +135,8 @@ components:
             $ref: '#/components/schemas/Problem'
 
   parameters:
-    cxIdAuthFleet:
-      name: x-pagopa-pn-cx-id
-      in: header
-      required: true
-      schema:
-        type: string
-      description: Identificativo interno (internalId) del destinatario, iniettato dall'API Gateway.
+    cxIdAuthFleet:                                                  # NO EXTERNAL
+      $ref: 'remote-refs.yaml#/components/parameters/cxIdAuthFleet' # NO EXTERNAL
     cxTaxId:
       name: x-pagopa-cx-taxid
       in: header
