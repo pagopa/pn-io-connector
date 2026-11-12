@@ -7,6 +7,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.ActivationPayloa
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.ActivationStatus;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.CxTypeAuthFleet;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.FiscalCodePayload;
+import it.pagopa.pn.ioconnector.middleware.msclient.ExternalRegistriesPrivacyNoticeClient;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOLegalClient;
 import it.pagopa.pn.ioconnector.middleware.msclient.UserAttributesConsentClient;
 import lombok.CustomLog;
@@ -29,7 +30,7 @@ public class IoActivationService {
     private static final String PRIVACY_NOTICE_PORTAL_TYPE_PF = "PF";
 
     private final IOLegalClient ioLegalClient;
-    private final PrivacyNoticeService privacyNoticeService;
+    private final ExternalRegistriesPrivacyNoticeClient externalRegistriesPrivacyNoticeClient;
     private final UserAttributesConsentClient userAttributesConsentClient;
 
     public Activation getActivation(FiscalCodePayload request) {
@@ -74,7 +75,8 @@ public class IoActivationService {
     }
 
     private void acceptConsent(String uid, String cxId, CxTypeAuthFleet cxType, ConsentType consentType) {
-        Integer version = privacyNoticeService.findPrivacyNoticeVersion(consentType.getValue(), PRIVACY_NOTICE_PORTAL_TYPE_PF);
+        Integer version = externalRegistriesPrivacyNoticeClient.findPrivacyNoticeVersion(
+                consentType.getValue(), PRIVACY_NOTICE_PORTAL_TYPE_PF);
         userAttributesConsentClient.acceptConsent(uid, cxId, toUserAttributesCxType(cxType), consentType, version);
         log.info("Consent accepted: consentType={} version={}", consentType.getValue(), version);
     }

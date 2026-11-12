@@ -235,20 +235,6 @@ Parameters:
     Default: 'https://api.io.pagopa.it/api/v1'
     Description: 'Base URL of Backend IO per il dominio legale. Distinto da PnIoConnectorIoBaseUrl, che negli ambienti non produttivi punta al mock delle comunicazioni bonarie.'
 
-  PnIoConnectorOneTrustBaseUrl:
-    Type: String
-    Description: 'Base URL of OneTrust used to resolve the published version of privacy notices'
-
-  PnIoConnectorOneTrustReadTimeoutMillis:
-    Type: Number
-    Default: 3000
-    Description: 'Read timeout in milliseconds of the OneTrust REST client'
-
-  PnIoConnectorOneTrustRetryMaxAttempts:
-    Type: Number
-    Default: 1
-    Description: 'Max retry attempts of the OneTrust REST client'
-
   PnIoConnectorPollingQueueName:
     Type: String
     Description: 'Name of SQS queue pn-io-connector-polling-queue (from storage.yml output)'
@@ -365,16 +351,14 @@ Resources:
         ContainerEnvEntry15: !Sub 'PN_IO_CONNECTOR_IO_LEGAL_BASE_URL=${PnIoConnectorIoLegalBaseUrl}'
         ContainerEnvEntry16: !Sub 'PN_IO_CONNECTOR_OPTIN_DYNAMODB_TABLE_NAME=${PnIoConnectorOptInTableName}'
         ContainerEnvEntry17: !Sub 'PN_IO_CONNECTOR_SERVICE_CONFIGURATIONS_PARAMETER_NAME=${PnIoConnectorServiceConfigurationsParameterName}'
-        ContainerEnvEntry18: !Sub 'PN_IO_CONNECTOR_ONE_TRUST_BASE_URL=${PnIoConnectorOneTrustBaseUrl}'
+        ContainerEnvEntry18: !Sub 'PN_IO_CONNECTOR_EXTERNAL_REGISTRIES_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
         ContainerEnvEntry19: !Sub 'PN_IO_CONNECTOR_USER_ATTRIBUTES_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
-        ContainerEnvEntry20: !Sub 'PN_IO_CONNECTOR_ONE_TRUST_READ_TIMEOUT_MILLIS=${PnIoConnectorOneTrustReadTimeoutMillis}'
-        ContainerEnvEntry21: !Sub 'PN_IO_CONNECTOR_ONE_TRUST_RETRY_MAX_ATTEMPTS=${PnIoConnectorOneTrustRetryMaxAttempts}'
-        ContainerEnvEntry22: !Sub 'PN_IO_CONNECTOR_SQS_DELIVERY_PUSH_INPUT_QUEUE_NAME=${DeliveryPushInputsQueueName}'
-        ContainerEnvEntry23: !Sub 'PN_IO_CONNECTOR_IO_REMOTE_CONTENT_CFG_ID=${IoRemoteContentCfgId}'
-        ContainerEnvEntry24: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_TOS=${PortalUrl}/termini-di-servizio'
-        ContainerEnvEntry25: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_PRIVACY=${PortalUrl}/informativa-privacy'
-        ContainerEnvEntry26: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_CITTADINI=${SendPortalUrl}/cittadini'
-        ContainerEnvEntry27: !Sub 'PN_TIMELINE_SERVICE_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
+        ContainerEnvEntry20: !Sub 'PN_IO_CONNECTOR_SQS_DELIVERY_PUSH_INPUT_QUEUE_NAME=${DeliveryPushInputsQueueName}'
+        ContainerEnvEntry21: !Sub 'PN_IO_CONNECTOR_IO_REMOTE_CONTENT_CFG_ID=${IoRemoteContentCfgId}'
+        ContainerEnvEntry22: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_TOS=${PortalUrl}/termini-di-servizio'
+        ContainerEnvEntry23: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_PRIVACY=${PortalUrl}/informativa-privacy'
+        ContainerEnvEntry24: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_CITTADINI=${SendPortalUrl}/cittadini'
+        ContainerEnvEntry25: !Sub 'PN_TIMELINE_SERVICE_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
         MappedPaths: '/io-connector/*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
@@ -410,7 +394,6 @@ Resources:
             Resource:
               - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/io-connector/*'
               - !Join [ '', [ !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/', !Ref PnIoConnectorServiceConfigurationsParameterName ] ]
-              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/MapPrivacyNotice'
           - Effect: Allow
             Action:
               - dynamodb:GetItem

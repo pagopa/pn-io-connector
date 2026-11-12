@@ -7,6 +7,7 @@ import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.Activation;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.ActivationPayload;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.ActivationStatus;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.CxTypeAuthFleet;
+import it.pagopa.pn.ioconnector.middleware.msclient.ExternalRegistriesPrivacyNoticeClient;
 import it.pagopa.pn.ioconnector.middleware.msclient.IOLegalClient;
 import it.pagopa.pn.ioconnector.middleware.msclient.UserAttributesConsentClient;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,7 @@ class IoActivationServiceTest {
     private IOLegalClient ioLegalClient;
 
     @Mock
-    private PrivacyNoticeService privacyNoticeService;
+    private ExternalRegistriesPrivacyNoticeClient externalRegistriesPrivacyNoticeClient;
 
     @Mock
     private UserAttributesConsentClient userAttributesConsentClient;
@@ -65,8 +66,8 @@ class IoActivationServiceTest {
     }
 
     private void stubVersions() {
-        when(privacyNoticeService.findPrivacyNoticeVersion("TOS", "PF")).thenReturn(TOS_VERSION);
-        when(privacyNoticeService.findPrivacyNoticeVersion("DATAPRIVACY", "PF")).thenReturn(DATAPRIVACY_VERSION);
+        when(externalRegistriesPrivacyNoticeClient.findPrivacyNoticeVersion("TOS", "PF")).thenReturn(TOS_VERSION);
+        when(externalRegistriesPrivacyNoticeClient.findPrivacyNoticeVersion("DATAPRIVACY", "PF")).thenReturn(DATAPRIVACY_VERSION);
     }
 
     private Activation upsert(ActivationStatus status) {
@@ -80,12 +81,12 @@ class IoActivationServiceTest {
 
         Activation result = upsert(ActivationStatus.ACTIVE);
 
-        InOrder order = inOrder(privacyNoticeService, userAttributesConsentClient, ioLegalClient);
-        order.verify(privacyNoticeService).findPrivacyNoticeVersion("TOS", "PF");
+        InOrder order = inOrder(externalRegistriesPrivacyNoticeClient, userAttributesConsentClient, ioLegalClient);
+        order.verify(externalRegistriesPrivacyNoticeClient).findPrivacyNoticeVersion("TOS", "PF");
         order.verify(userAttributesConsentClient).acceptConsent(UID, CX_ID,
                 it.pagopa.pn.ioconnector.generated.openapi.msclient.userattributes.v1.dto.CxTypeAuthFleet.PF,
                 ConsentType.TOS, TOS_VERSION);
-        order.verify(privacyNoticeService).findPrivacyNoticeVersion("DATAPRIVACY", "PF");
+        order.verify(externalRegistriesPrivacyNoticeClient).findPrivacyNoticeVersion("DATAPRIVACY", "PF");
         order.verify(userAttributesConsentClient).acceptConsent(UID, CX_ID,
                 it.pagopa.pn.ioconnector.generated.openapi.msclient.userattributes.v1.dto.CxTypeAuthFleet.PF,
                 ConsentType.DATAPRIVACY, DATAPRIVACY_VERSION);
@@ -115,7 +116,7 @@ class IoActivationServiceTest {
 
         Activation result = upsert(ActivationStatus.INACTIVE);
 
-        verifyNoInteractions(privacyNoticeService, userAttributesConsentClient);
+        verifyNoInteractions(externalRegistriesPrivacyNoticeClient, userAttributesConsentClient);
         ArgumentCaptor<it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ActivationPayload> captor =
                 ArgumentCaptor.forClass(it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.dto.ActivationPayload.class);
         verify(ioLegalClient).upsertActivation(captor.capture());
@@ -127,12 +128,12 @@ class IoActivationServiceTest {
     @Test
     void upsertActivation_tosConsentFails_doesNotAcceptDataPrivacyNorCallIo() {
         PnHttpResponseException error = new PnHttpResponseException("user-attributes error", 500);
-        when(privacyNoticeService.findPrivacyNoticeVersion("TOS", "PF")).thenReturn(TOS_VERSION);
+        when(externalRegistriesPrivacyNoticeClient.findPrivacyNoticeVersion("TOS", "PF")).thenReturn(TOS_VERSION);
         doThrow(error).when(userAttributesConsentClient).acceptConsent(any(), any(), any(), eq(ConsentType.TOS), any());
 
         assertThatThrownBy(() -> upsert(ActivationStatus.ACTIVE)).isSameAs(error);
 
-        verify(privacyNoticeService, never()).findPrivacyNoticeVersion(eq("DATAPRIVACY"), any());
+        verify(externalRegistriesPrivacyNoticeClient, never()).findPrivacyNoticeVersion(eq("DATAPRIVACY"), any());
         verify(userAttributesConsentClient, never()).acceptConsent(any(), any(), any(), eq(ConsentType.DATAPRIVACY), any());
         verifyNoInteractions(ioLegalClient);
     }
@@ -152,7 +153,7 @@ class IoActivationServiceTest {
     @Test
     void upsertActivation_versionResolutionFails_propagatesAndDoesNotCallIo() {
         RuntimeException error = new IllegalStateException("version lookup failed");
-        when(privacyNoticeService.findPrivacyNoticeVersion("TOS", "PF")).thenThrow(error);
+        when(externalRegistriesPrivacyNoticeClient.findPrivacyNoticeVersion("TOS", "PF")).thenThrow(error);
 
         assertThatThrownBy(() -> upsert(ActivationStatus.ACTIVE)).isSameAs(error);
 
@@ -206,7 +207,7 @@ class IoActivationServiceTest {
 
         Activation result = upsert(ActivationStatus.INACTIVE);
 
-        verifyNoInteractions(privacyNoticeService, userAttributesConsentClient);
+        verifyNoInteractions(externalRegistriesPrivacyNoticeClient, userAttributesConsentClient);
         assertThat(result.getStatus()).isEqualTo(ActivationStatus.ACTIVE);
         assertThat(result.getVersion()).isEqualTo(9);
     }
@@ -245,7 +246,7 @@ class IoActivationServiceTest {
         assertThat(result.getFiscalCode()).isEqualTo(FISCAL_CODE);
         assertThat(result.getStatus()).isEqualTo(ActivationStatus.fromValue(ioStatus));
         assertThat(result.getVersion()).isEqualTo(6);
-        verifyNoInteractions(privacyNoticeService, userAttributesConsentClient);
+        verifyNoInteractions(externalRegistriesPrivacyNoticeClient, userAttributesConsentClient);
     }
 
     @Test
