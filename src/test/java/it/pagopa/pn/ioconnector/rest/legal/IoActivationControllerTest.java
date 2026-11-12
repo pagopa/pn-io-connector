@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import it.pagopa.pn.commons.exceptions.PnExceptionsCodes;
 import it.pagopa.pn.commons.exceptions.PnHttpResponseException;
 import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
-import it.pagopa.pn.ioconnector.exceptions.PnPrivacyNoticeNotFoundException;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.Activation;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.ActivationPayload;
 import it.pagopa.pn.ioconnector.generated.openapi.server.v1.dto.ActivationStatus;
@@ -22,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.web.client.RestClientException;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -112,9 +112,9 @@ class IoActivationControllerTest {
     }
 
     @Test
-    void upsertIoActivation_missingPrivacyNoticeMapping_returns500() throws Exception {
+    void upsertIoActivation_externalRegistriesUnreachable_returns500() throws Exception {
         when(ioActivationService.upsertActivation(any(), any(), any(), any()))
-                .thenThrow(new PnPrivacyNoticeNotFoundException("TOS", "PF"));
+                .thenThrow(new RestClientException("external-registries unreachable"));
 
         mockMvc.perform(putRequest())
                 .andExpect(status().isInternalServerError())

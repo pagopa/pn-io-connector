@@ -24,7 +24,6 @@ class PnIoConnectorConfigValidationTest {
         validator = Validation.buildDefaultValidatorFactory().getValidator();
         config = new PnIoConnectorConfig();
         config.setSqsSendQueueName("queue");
-        config.setOneTrustBaseUrl("http://onetrust.test");
         config.setUserAttributesBaseUrl("http://user-attributes.test");
     }
 
@@ -38,15 +37,6 @@ class PnIoConnectorConfigValidationTest {
     @Test
     void validate_allRequiredPropertiesPresent_noViolations() {
         assertThat(violatedProperties()).isEmpty();
-    }
-
-    @ParameterizedTest
-    @NullSource
-    @ValueSource(strings = {"", "   "})
-    void validate_blankOneTrustBaseUrl_isViolation(String value) {
-        config.setOneTrustBaseUrl(value);
-
-        assertThat(violatedProperties()).containsExactly("oneTrustBaseUrl");
     }
 
     @ParameterizedTest
