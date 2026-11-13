@@ -20,8 +20,8 @@ public class DigitalDisclaimerProcessor implements BottomSheetProcessor {
             String template = new String(new ClassPathResource(TEMPLATE_PATH).getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             String markdown = template
                     .replace("{{iun}}", deliveryInformation.getIun() != null ? deliveryInformation.getIun() : "")
-                    .replace("{{senderDenomination}}", "")
-                    .replace("{{subject}}", "");
+                    .replace("{{senderDenomination}}", deliveryInformation.getSenderDenomination() != null ? deliveryInformation.getSenderDenomination() : "")
+                    .replace("{{subject}}", deliveryInformation.getSubject() != null ? deliveryInformation.getSubject() : "");
             return new PreconditionContent(TITLE, markdown);
         } catch (IOException e) {
             throw new it.pagopa.pn.commons.exceptions.PnInternalException(

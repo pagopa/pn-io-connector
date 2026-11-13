@@ -3,6 +3,7 @@ package it.pagopa.pn.ioconnector.middleware.msclient;
 import it.pagopa.pn.ioconnector.config.IoLegalSecrets;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.datavault.v1.api.RecipientsApi;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.delivery.v1.api.InternalOnlyApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.externalregistries.v1.api.PrivacyNoticeApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.DefaultApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.timelineservice.v1.api.TimelineControllerApi;
@@ -65,6 +66,19 @@ public class MsClientConfig {
             );
             apiClient.setBasePath(config.getTimelineServiceBaseUrl());
             return new TimelineControllerApi(apiClient);
+        }
+    }
+
+    @Configuration
+    static class DeliveryApis extends BaseRestClient {
+
+        @Bean
+        InternalOnlyApi internalOnlyApi(PnIoConnectorConfig config) {
+            var apiClient = new it.pagopa.pn.ioconnector.generated.openapi.msclient.delivery.v1.ApiClient(
+                    initRestClient().build()
+            );
+            apiClient.setBasePath(config.getDeliveryBaseUrl());
+            return new InternalOnlyApi(apiClient);
         }
     }
 
