@@ -62,6 +62,7 @@ public class PnIoConnectorConfig {
     private String piattaformanotificheurlTos;
     private String piattaformanotificheurlPrivacy;
     private String sqsDeliveryPushInputQueueName;
+    private String deliveryBaseUrl;
 
     /**
      * Comunicazioni Bonarie

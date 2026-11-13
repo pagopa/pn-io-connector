@@ -15,4 +15,6 @@ public class DeliveryInformationDto {
     private Instant refinementOrViewedDate;
     private Boolean isNotificationCancelled;
     private Boolean isNotificationAccepted;
+    private String senderDenomination;
+    private String subject;
 }

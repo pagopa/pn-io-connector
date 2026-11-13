@@ -29,8 +29,8 @@ public class AnalogDisclaimerProcessor implements BottomSheetProcessor {
                     ? TIME_FORMATTER.format(deliveryInformation.getSchedulingAnalogDate()) : "";
             String markdown = template
                     .replace("{{iun}}", deliveryInformation.getIun() != null ? deliveryInformation.getIun() : "")
-                    .replace("{{senderDenomination}}", "")
-                    .replace("{{subject}}", "")
+                    .replace("{{senderDenomination}}", deliveryInformation.getSenderDenomination() != null ? deliveryInformation.getSenderDenomination() : "")
+                    .replace("{{subject}}", deliveryInformation.getSubject() != null ? deliveryInformation.getSubject() : "")
                     .replace("{{data}}", data)
                     .replace("{{ora}}", ora);
             return new PreconditionContent(TITLE, markdown);
