@@ -67,6 +67,28 @@ class PnIoConnectorConfigIoLegalSecretsTest {
     }
 
     @Test
+    void toString_doesNotExposeSecretValues() {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"CF1,CF2"}""");
+
+        String text = config.ioLegalSecrets(secretsManagerClient, objectMapper).toString();
+
+        assertFalse(text.contains("key-legal"));
+        assertFalse(text.contains("key-optin"));
+        assertFalse(text.contains("CF1"));
+    }
+
+    @Test
+    void legacyOneTrustToken_isIgnored() {
+        mockSecret("""
+                {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"*","OneTrustToken":"ot-token"}""");
+
+        IoLegalSecrets secrets = config.ioLegalSecrets(secretsManagerClient, objectMapper);
+
+        assertEquals("key-legal", secrets.ioApiKey());
+    }
+
+    @Test
     void whitelistInExternalRegistriesFormat_enablesFilter() {
         mockSecret("""
                 {"IoApiKey":"key-legal","IoActApiKey":"key-optin","IoWhiteList":"BSTLSS72M29L736X, TRRMTT71R09A944J"}""");

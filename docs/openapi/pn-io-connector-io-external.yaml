@@ -9,6 +9,8 @@ info:
 tags:
   - name: IoConnector
     description: Operazioni verso App IO
+  - name: FromIoMessage
+    description: Endpoint invocati da App IO per il disclaimer di pre-apertura notifica
 
 paths:
   /io-connector/messages/{id}:
@@ -73,7 +75,7 @@ paths:
         '200':
           description: Contenuto binario dell'allegato (modalità bytestream).
           content:
-            application/pdf: {}
+            application/octet-stream: {}
         '302':
           description: Redirect alla presignedUri di SafeStorage.
           headers:
@@ -86,12 +88,56 @@ paths:
         '500':
           description: Errore interno.
 
+  /io-connector/io/v1/notification-disclaimer/{iun}:
+    get:
+      tags: [FromIoMessage]
+      summary: Disclaimer di pre-apertura notifica
+      operationId: notificationDisclaimer
+      parameters:
+        - name: iun
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificativo Univoco Notifica su SEND.
+        - $ref: '#/components/parameters/cxTaxId'                       # ONLY EXTERNAL
+        - $ref: '#/components/parameters/lollipopOriginalMethod'        # ONLY EXTERNAL
+        - $ref: '#/components/parameters/lollipopOriginalUrl'           # ONLY EXTERNAL
+        - $ref: '#/components/parameters/lollipopPublicKey'             # ONLY EXTERNAL
+        - $ref: '#/components/parameters/lollipopAssertionRef'          # ONLY EXTERNAL
+        - $ref: '#/components/parameters/lollipopAssertionType'         # ONLY EXTERNAL
+        - $ref: '#/components/parameters/lollipopAuthJwt'               # ONLY EXTERNAL
+        - $ref: '#/components/parameters/lollipopUserId'                # ONLY EXTERNAL
+        - $ref: '#/components/parameters/lollipopSignatureInput'        # ONLY EXTERNAL
+        - $ref: '#/components/parameters/lollipopSignature'             # ONLY EXTERNAL
+      responses:
+        '200':
+          description: Contenuto del bottom sheet di pre-apertura notifica.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreconditionContent'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '500':
+          $ref: '#/components/responses/Problem'
+
 components:
+  responses:
+    Problem:
+      description: Errore.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
   parameters:
     cxTaxId:
       name: x-pagopa-cx-taxid
       in: header
-      required: true
+      required: false
       schema:
         type: string
         minLength: 16
@@ -141,7 +187,7 @@ components:
     lollipopUserId:
       name: x-pagopa-lollipop-user-id
       in: header
-      required: false
+      required: true
       schema:
         type: string
         minLength: 16
@@ -160,6 +206,33 @@ components:
         type: string
 
   schemas:
+    PreconditionContent:
+      type: object
+      description: Contenuto del bottom sheet di pre-apertura notifica.
+      required:
+        - title
+        - markdown
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          description: Titolo del bottom sheet.
+        markdown:
+          type: string
+          description: Corpo del bottom sheet in formato Markdown.
+
+    Problem:
+      type: object
+      properties:
+        status:
+          type: integer
+        title:
+          type: string
+        detail:
+          type: string
+        traceId:
+          type: string
+
     GetMessageResponse:
       type: object
       description: Dettagli del messaggio e lista degli allegati esposti a BackEnd IO.

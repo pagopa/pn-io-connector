@@ -3,7 +3,11 @@ package it.pagopa.pn.ioconnector.middleware.msclient;
 import it.pagopa.pn.ioconnector.config.IoLegalSecrets;
 import it.pagopa.pn.ioconnector.config.PnIoConnectorConfig;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.datavault.v1.api.RecipientsApi;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.delivery.v1.api.InternalOnlyApi;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.externalregistries.v1.api.PrivacyNoticeApi;
 import it.pagopa.pn.ioconnector.generated.openapi.msclient.io.v1.api.DefaultApi;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.timelineservice.v1.api.TimelineControllerApi;
+import it.pagopa.pn.ioconnector.generated.openapi.msclient.userattributes.v1.api.ConsentsApi;
 import it.pagopa.pn.ioconnector.middleware.msclient.common.BaseRestClient;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -23,6 +27,58 @@ public class MsClientConfig {
             );
             apiClient.setBasePath(config.getDataVaultBaseUrl());
             return new RecipientsApi(apiClient);
+        }
+    }
+
+    @Configuration
+    static class UserAttributesApis extends BaseRestClient {
+
+        @Bean
+        ConsentsApi consentsApi(PnIoConnectorConfig config) {
+            var apiClient = new it.pagopa.pn.ioconnector.generated.openapi.msclient.userattributes.v1.ApiClient(
+                    initRestClient().build()
+            );
+            apiClient.setBasePath(config.getUserAttributesBaseUrl());
+            return new ConsentsApi(apiClient);
+        }
+    }
+
+    @Configuration
+    static class ExternalRegistriesApis extends BaseRestClient {
+
+        @Bean
+        PrivacyNoticeApi privacyNoticeApi(PnIoConnectorConfig config) {
+            var apiClient = new it.pagopa.pn.ioconnector.generated.openapi.msclient.externalregistries.v1.ApiClient(
+                    initRestClient().build()
+            );
+            apiClient.setBasePath(config.getExternalRegistriesBaseUrl());
+            return new PrivacyNoticeApi(apiClient);
+        }
+    }
+
+    @Configuration
+    static class TimelineServiceApis extends BaseRestClient {
+
+        @Bean
+        TimelineControllerApi timelineControllerApi(PnIoConnectorConfig config) {
+            var apiClient = new it.pagopa.pn.ioconnector.generated.openapi.msclient.timelineservice.v1.ApiClient(
+                    initRestClient().build()
+            );
+            apiClient.setBasePath(config.getTimelineServiceBaseUrl());
+            return new TimelineControllerApi(apiClient);
+        }
+    }
+
+    @Configuration
+    static class DeliveryApis extends BaseRestClient {
+
+        @Bean
+        InternalOnlyApi internalOnlyApi(PnIoConnectorConfig config) {
+            var apiClient = new it.pagopa.pn.ioconnector.generated.openapi.msclient.delivery.v1.ApiClient(
+                    initRestClient().build()
+            );
+            apiClient.setBasePath(config.getDeliveryBaseUrl());
+            return new InternalOnlyApi(apiClient);
         }
     }
 

@@ -30,6 +30,12 @@
             <version>2.21.0-VT</version>
         </dependency>
 
+        <dependency>
+            <groupId>it.pagopa.pn</groupId>
+            <artifactId>pn-model</artifactId>
+            <version>2.13.0-SPRINGBOOT3</version>
+        </dependency>
+
         <!-- Spring Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -210,6 +216,129 @@
                                 <modelPackage>${project.groupId}.ioconnector.generated.openapi.msclient.datavault.v1.dto</modelPackage>
                                 <apiPackage>${project.groupId}.ioconnector.generated.openapi.msclient.datavault.v1.api</apiPackage>
                                 <configPackage>${project.groupId}.ioconnector.generated.openapi.msclient.datavault.v1.config</configPackage>
+                            </configOptions>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>generate-client-user-attributes</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <inputSpec>https://raw.githubusercontent.com/pagopa/pn-user-attributes/ad193e13fa379b415a93a769c037aa86471a3f6a/docs/openapi/pn-user-consents-api-internal.yaml</inputSpec>
+                            <skipValidateSpec>true</skipValidateSpec>
+                            <generatorName>java</generatorName>
+                            <library>restclient</library>
+                            <generateApiDocumentation>false</generateApiDocumentation>
+                            <generateApiTests>false</generateApiTests>
+                            <generateModelTests>false</generateModelTests>
+                            <generateSupportingFiles>true</generateSupportingFiles>
+                            <configOptions>
+                                <useJakartaEe>true</useJakartaEe>
+                                <swaggerAnnotations>false</swaggerAnnotations>
+                                <openApiNullable>false</openApiNullable>
+                                <annotationLibrary>none</annotationLibrary>
+                                <documentationProvider>source</documentationProvider>
+                                <useTags>true</useTags>
+                                <dateLibrary>java11</dateLibrary>
+                                <additionalModelTypeAnnotations>@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)</additionalModelTypeAnnotations>
+                                <basePackage>${project.groupId}.ioconnector.generated.openapi.msclient.userattributes.v1</basePackage>
+                                <modelPackage>${project.groupId}.ioconnector.generated.openapi.msclient.userattributes.v1.dto</modelPackage>
+                                <apiPackage>${project.groupId}.ioconnector.generated.openapi.msclient.userattributes.v1.api</apiPackage>
+                                <configPackage>${project.groupId}.ioconnector.generated.openapi.msclient.userattributes.v1.config</configPackage>
+                            </configOptions>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>generate-client-external-registries</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <inputSpec>https://raw.githubusercontent.com/pagopa/pn-external-registries/640cecc45be342252c996a4254b55480c019cb8a/docs/openapi/api-private-v1.yaml</inputSpec>
+                            <skipValidateSpec>true</skipValidateSpec>
+                            <generatorName>java</generatorName>
+                            <library>restclient</library>
+                            <generateApiDocumentation>false</generateApiDocumentation>
+                            <generateApiTests>false</generateApiTests>
+                            <generateModelTests>false</generateModelTests>
+                            <generateSupportingFiles>true</generateSupportingFiles>
+                            <configOptions>
+                                <useJakartaEe>true</useJakartaEe>
+                                <swaggerAnnotations>false</swaggerAnnotations>
+                                <openApiNullable>false</openApiNullable>
+                                <annotationLibrary>none</annotationLibrary>
+                                <documentationProvider>source</documentationProvider>
+                                <useTags>true</useTags>
+                                <dateLibrary>java11</dateLibrary>
+                                <additionalModelTypeAnnotations>@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)</additionalModelTypeAnnotations>
+                                <basePackage>${project.groupId}.ioconnector.generated.openapi.msclient.externalregistries.v1</basePackage>
+                                <modelPackage>${project.groupId}.ioconnector.generated.openapi.msclient.externalregistries.v1.dto</modelPackage>
+                                <apiPackage>${project.groupId}.ioconnector.generated.openapi.msclient.externalregistries.v1.api</apiPackage>
+                                <configPackage>${project.groupId}.ioconnector.generated.openapi.msclient.externalregistries.v1.config</configPackage>
+                            </configOptions>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>generate-client-timeline-service</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <inputSpec>https://raw.githubusercontent.com/pagopa/pn-timeline-service/d44eca41c0631a97c8c7334e1a578af20efe5127/docs/openapi/pn-timeline-service-private.yaml</inputSpec>
+                            <generatorName>java</generatorName>
+                            <library>restclient</library>
+                            <generateApiDocumentation>false</generateApiDocumentation>
+                            <generateApiTests>false</generateApiTests>
+                            <generateModelTests>false</generateModelTests>
+                            <generateSupportingFiles>true</generateSupportingFiles>
+                            <configOptions>
+                                <useJakartaEe>true</useJakartaEe>
+                                <swaggerAnnotations>false</swaggerAnnotations>
+                                <openApiNullable>false</openApiNullable>
+                                <annotationLibrary>none</annotationLibrary>
+                                <documentationProvider>source</documentationProvider>
+                                <useTags>true</useTags>
+                                <dateLibrary>java11</dateLibrary>
+                                <additionalModelTypeAnnotations>@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)</additionalModelTypeAnnotations>
+                                <basePackage>it.pagopa.pn.ioconnector.generated.openapi.msclient.timelineservice.v1</basePackage>
+                                <modelPackage>it.pagopa.pn.ioconnector.generated.openapi.msclient.timelineservice.v1.dto</modelPackage>
+                                <apiPackage>it.pagopa.pn.ioconnector.generated.openapi.msclient.timelineservice.v1.api</apiPackage>
+                                <configPackage>it.pagopa.pn.ioconnector.generated.openapi.msclient.timelineservice.v1.config</configPackage>
+                            </configOptions>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>generate-client-pn-delivery</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <inputSpec>https://raw.githubusercontent.com/pagopa/pn-delivery/3ff5a8b5fee1e38820e77b357348a5fe7ef8d310/docs/openapi/api-private.yaml</inputSpec>
+                            <skipValidateSpec>true</skipValidateSpec>
+                            <generatorName>java</generatorName>
+                            <library>restclient</library>
+                            <generateApiDocumentation>false</generateApiDocumentation>
+                            <generateApiTests>false</generateApiTests>
+                            <generateModelTests>false</generateModelTests>
+                            <generateSupportingFiles>true</generateSupportingFiles>
+                            <configOptions>
+                                <useJakartaEe>true</useJakartaEe>
+                                <swaggerAnnotations>false</swaggerAnnotations>
+                                <openApiNullable>false</openApiNullable>
+                                <annotationLibrary>none</annotationLibrary>
+                                <documentationProvider>source</documentationProvider>
+                                <useTags>true</useTags>
+                                <dateLibrary>java11</dateLibrary>
+                                <additionalModelTypeAnnotations>@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)</additionalModelTypeAnnotations>
+                                <basePackage>${project.groupId}.ioconnector.generated.openapi.msclient.delivery.v1</basePackage>
+                                <modelPackage>${project.groupId}.ioconnector.generated.openapi.msclient.delivery.v1.dto</modelPackage>
+                                <apiPackage>${project.groupId}.ioconnector.generated.openapi.msclient.delivery.v1.api</apiPackage>
+                                <configPackage>${project.groupId}.ioconnector.generated.openapi.msclient.delivery.v1.config</configPackage>
                             </configOptions>
                         </configuration>
                     </execution>

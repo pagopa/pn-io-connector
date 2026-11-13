@@ -7,6 +7,7 @@ import it.pagopa.pn.commons.conf.SharedAutoConfiguration;
 import jakarta.validation.constraints.NotBlank;
 import it.pagopa.pn.commons.exceptions.PnInternalException;
 import it.pagopa.pn.ioconnector.exceptions.PnIoConnectorExceptionCodes;
+import it.pagopa.pn.ioconnector.middleware.queue.producer.SqsIOSentMessageProducer;
 import lombok.CustomLog;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -18,6 +19,7 @@ import org.springframework.validation.annotation.Validated;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
+import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.ssm.SsmClient;
 import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
 import software.amazon.awssdk.services.ssm.model.GetParameterResponse;
@@ -36,6 +38,9 @@ public class PnIoConnectorConfig {
     private String ioBaseUrl;
     private String ioLegalBaseUrl;
     private String dataVaultBaseUrl;
+    @NotBlank
+    private String userAttributesBaseUrl;
+    private String externalRegistriesBaseUrl;
     private String dynamodbTableName;
     private String optinDynamodbTableName;
     @NotBlank
@@ -49,6 +54,15 @@ public class PnIoConnectorConfig {
     private int pollingIntervalMins;
     private Long pollingFixedIntervalSeconds;
     private int ioOptinMinDays;
+    private String timelineServiceBaseUrl;
+    private boolean enableIoMessage;
+    private boolean enableIoActivationMessage;
+    private String ioRemoteContentCfgId;
+    private String piattaformanotificheurlCittadini;
+    private String piattaformanotificheurlTos;
+    private String piattaformanotificheurlPrivacy;
+    private String sqsDeliveryPushInputQueueName;
+    private String deliveryBaseUrl;
 
     /**
      * Comunicazioni Bonarie
@@ -90,7 +104,7 @@ public class PnIoConnectorConfig {
         }
 
         if (secrets == null || !StringUtils.hasText(secrets.ioApiKey()) || !StringUtils.hasText(secrets.ioActApiKey())) {
-            throw new PnInternalException("Incomplete legal secret, both IoApiKey and IoActApiKey are required: " + legalSecretsName
+            throw new PnInternalException("Incomplete legal secret, IoApiKey and IoActApiKey are required: " + legalSecretsName
                     + " - keys found: " + keys, PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_LEGAL_SECRET_ERROR);
         }
         if (IoWhitelistChecker.parse(secrets.ioWhiteList()).isEmpty()) {
@@ -110,6 +124,11 @@ public class PnIoConnectorConfig {
             log.info("IO whitelist DISABLED - wildcard '*' configured");
         }
         return checker;
+    }
+
+    @Bean
+    public SqsIOSentMessageProducer sqsIOSentMessageProducer(SqsClient sqsClient, ObjectMapper objectMapper) {
+        return new SqsIOSentMessageProducer(sqsClient, sqsDeliveryPushInputQueueName, objectMapper);
     }
 
     @Bean

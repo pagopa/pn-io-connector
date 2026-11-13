@@ -1,0 +1,1 @@
+This message contains a notification, that is a **communication with legal value**.
