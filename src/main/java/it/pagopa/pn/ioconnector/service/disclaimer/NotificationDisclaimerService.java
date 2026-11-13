@@ -57,6 +57,6 @@ public class NotificationDisclaimerService {
                 .findFirst()
                 .orElseThrow(() -> new PnHttpResponseException(
                         PnIoConnectorExceptionCodes.ERROR_CODE_IOCONNECTOR_NOTIFICATION_RECIPIENT_NOT_FOUND,
-                        403));
+                        404));
     }
 }

@@ -113,7 +113,7 @@ class NotificationDisclaimerServiceTest {
     }
 
     @Test
-    void getNotificationDisclaimer_WhenCxIdNotAmongRecipients_ThenThrows403() {
+    void getNotificationDisclaimer_WhenCxIdNotAmongRecipients_ThenThrows404() {
         NotificationDto notification = NotificationDto.builder()
                 .recipients(List.of(NotificationRecipientDto.builder().internalId("other-cx-id").build()))
                 .build();
@@ -122,6 +122,6 @@ class NotificationDisclaimerServiceTest {
 
         PnHttpResponseException ex = assertThrows(PnHttpResponseException.class,
                 () -> service.getNotificationDisclaimer(IUN, CX_ID));
-        assertThat(ex.getStatusCode()).isEqualTo(403);
+        assertThat(ex.getStatusCode()).isEqualTo(404);
     }
 }

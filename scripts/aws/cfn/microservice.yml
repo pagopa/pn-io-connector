@@ -359,6 +359,7 @@ Resources:
         ContainerEnvEntry23: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_PRIVACY=${PortalUrl}/informativa-privacy'
         ContainerEnvEntry24: !Sub 'PN_IO_CONNECTOR_PIATTAFORMANOTIFICHEURL_CITTADINI=${SendPortalUrl}/cittadini'
         ContainerEnvEntry25: !Sub 'PN_TIMELINE_SERVICE_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
+        ContainerEnvEntry26: !Sub 'PN_DELIVERY_BASE_URL=http://${ApplicationLoadBalancerDomain}:8080'
         MappedPaths: '/io-connector/*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds
